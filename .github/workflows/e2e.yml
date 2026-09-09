@@ -1,14 +1,17 @@
 name: ParaBank E2E
 
 on:
+  # Pull Requests para main executam apenas os smoke tests.
   pull_request:
     branches:
       - main
 
+  # Push na main executa a regressão completa.
   push:
     branches:
       - main
 
+  # Permite execução manual pela aba Actions.
   workflow_dispatch:
     inputs:
       scope:
@@ -34,12 +37,24 @@ on:
           - webkit
 
 
-# Evita duas execuções concorrentes desnecessárias
-# para a mesma branch/PR.
+# ============================================================
+# CONCURRENCY
+#
+# Evita execuções concorrentes desnecessárias para a mesma
+# branch ou Pull Request.
+# ============================================================
+
 concurrency:
   group: parabank-e2e-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+
+# ============================================================
+# PERMISSIONS
+#
+# contents: checkout
+# pages / id-token: publicação do Allure no GitHub Pages
+# ============================================================
 
 permissions:
   contents: read
@@ -47,6 +62,10 @@ permissions:
   pages: write
   id-token: write
 
+
+# ============================================================
+# VARIÁVEIS GLOBAIS
+# ============================================================
 
 env:
   PYTHONUNBUFFERED: "1"
@@ -61,65 +80,78 @@ env:
   BLOCK_NONESSENTIAL_RESOURCES: "true"
   UI_SCENARIO_DELAY_SECONDS: "2.0"
 
+  # Nunca armazenar o token diretamente no YAML.
   SCRAPE_DO_TOKEN: ${{ secrets.SCRAPE_DO_TOKEN }}
 
 
 jobs:
 
   # ==========================================================
-  # TESTES
+  # CI - TESTES AUTOMATIZADOS
   # ==========================================================
 
   test:
     name: E2E Tests
+
     runs-on: ubuntu-latest
 
     timeout-minutes: 30
 
+    # Informa ao job de deploy se o artifact do Pages
+    # foi criado corretamente.
     outputs:
       pages_ready: ${{ steps.pages_upload.outcome }}
 
+
     steps:
 
-      # ------------------------------------------------------
-      # Checkout
-      # ------------------------------------------------------
+      # ======================================================
+      # CHECKOUT
+      # ======================================================
 
       - name: Checkout repository
         uses: actions/checkout@v7
 
 
-      # ------------------------------------------------------
-      # Python
-      # ------------------------------------------------------
+      # ======================================================
+      # PYTHON
+      # ======================================================
 
       - name: Setup Python
         uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+
+          # Cache das dependências pip.
           cache: "pip"
           cache-dependency-path: requirements.txt
 
 
-      # ------------------------------------------------------
-      # Valida secret
-      # ------------------------------------------------------
+      # ======================================================
+      # SCRAPE.DO SECRET
+      #
+      # O CI não utiliza .env.
+      #
+      # configure_env.py encontrará SCRAPE_DO_TOKEN através
+      # da variável de ambiente fornecida pelo GitHub Secret.
+      # ======================================================
 
       - name: Validate SCRAPE_DO_TOKEN
         shell: bash
         run: |
           if [[ -z "${SCRAPE_DO_TOKEN}" ]]; then
             echo "::error::SCRAPE_DO_TOKEN is not configured."
-            echo "::error::Create the repository secret SCRAPE_DO_TOKEN."
+            echo "::error::Configure the repository secret SCRAPE_DO_TOKEN."
             exit 1
           fi
 
           echo "SCRAPE_DO_TOKEN is configured."
+          echo "The secret value will not be displayed."
 
 
-      # ------------------------------------------------------
-      # Resolve escopo
-      # ------------------------------------------------------
+      # ======================================================
+      # DEFINE ESCOPO E BROWSER
+      # ======================================================
 
       - name: Resolve execution configuration
         id: execution
@@ -128,36 +160,60 @@ jobs:
           scope="full"
           browser="chromium"
 
-          # Pull Requests executam apenas smoke.
+          # --------------------------------------------------
+          # Pull Request
+          #
+          # Feedback rápido: somente smoke tests.
+          # --------------------------------------------------
+
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             scope="smoke"
+            browser="chromium"
           fi
 
-          # Push na main executa suite completa.
+
+          # --------------------------------------------------
+          # Push main
+          #
+          # Regressão completa.
+          # --------------------------------------------------
+
           if [[ "${{ github.event_name }}" == "push" ]]; then
             scope="full"
+            browser="chromium"
           fi
 
-          # Execução manual permite escolher.
+
+          # --------------------------------------------------
+          # Execução manual
+          #
+          # Usuário escolhe scope e browser.
+          # --------------------------------------------------
+
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             scope="${{ inputs.scope }}"
             browser="${{ inputs.browser }}"
           fi
 
+
           echo "scope=${scope}" >> "$GITHUB_OUTPUT"
           echo "browser=${browser}" >> "$GITHUB_OUTPUT"
 
+
+          echo
           echo "============================================"
           echo "Execution configuration"
           echo "============================================"
+          echo "Event   : ${{ github.event_name }}"
           echo "Scope   : ${scope}"
           echo "Browser : ${browser}"
           echo "============================================"
+          echo
 
 
-      # ------------------------------------------------------
-      # Dependências Python
-      # ------------------------------------------------------
+      # ======================================================
+      # DEPENDÊNCIAS PYTHON
+      # ======================================================
 
       - name: Install Python dependencies
         shell: bash
@@ -166,21 +222,30 @@ jobs:
           python -m pip install -r requirements.txt
 
 
-      # ------------------------------------------------------
-      # Playwright
-      # ------------------------------------------------------
+      # ======================================================
+      # PLAYWRIGHT
+      #
+      # --with-deps instala também as bibliotecas Linux
+      # necessárias pelo browser.
+      # ======================================================
 
       - name: Install Playwright browser
         shell: bash
         run: |
+          browser="${{ steps.execution.outputs.browser }}"
+
+          echo "Installing Playwright browser: ${browser}"
+
           python -m playwright install \
             --with-deps \
-            "${{ steps.execution.outputs.browser }}"
+            "${browser}"
 
 
-      # ------------------------------------------------------
-      # Node / Allure
-      # ------------------------------------------------------
+      # ======================================================
+      # NODE.JS
+      #
+      # Allure Report 3 utiliza Node.js.
+      # ======================================================
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
@@ -188,26 +253,39 @@ jobs:
           node-version: "24"
 
 
+      # ======================================================
+      # ALLURE REPORT 3
+      # ======================================================
+
       - name: Install Allure Report
         shell: bash
         run: |
+          echo "Installing Allure Report..."
+
           npm install -g allure
 
+          echo
           echo "Allure version:"
           allure --version
 
 
-      # ------------------------------------------------------
-      # Executa testes
+      # ======================================================
+      # EXECUÇÃO DOS TESTES
       #
-      # IMPORTANTE:
+      # Importante:
       #
-      # Não falhamos o step imediatamente.
+      # O step NÃO falha imediatamente quando Behave retorna
+      # erro.
       #
-      # Primeiro salvamos o exit code para permitir que
-      # screenshots, allure-results e reports sejam enviados.
-      # O pipeline recebe o status correto somente no final.
-      # ------------------------------------------------------
+      # Guardamos o exit code e continuamos para:
+      #
+      # - gerar Allure;
+      # - salvar screenshots;
+      # - publicar artifacts;
+      # - publicar relatório.
+      #
+      # No fim do job o resultado real dos testes será aplicado.
+      # ======================================================
 
       - name: Run automated tests
         id: tests
@@ -216,57 +294,95 @@ jobs:
           scope="${{ steps.execution.outputs.scope }}"
           browser="${{ steps.execution.outputs.browser }}"
 
+
+          # --------------------------------------------------
+          # Argumentos básicos
+          # --------------------------------------------------
+
           args=(
             --skip-setup
             --browser "$browser"
           )
 
+
+          # --------------------------------------------------
+          # Escopo
+          # --------------------------------------------------
+
           case "$scope" in
 
             smoke)
+
               args+=(
                 --tags
                 "@smoke"
               )
+
               ;;
 
+
             login)
+
               args+=(
                 --scope
                 login
               )
+
               ;;
 
+
             registration)
+
               args+=(
                 --scope
                 registration
               )
+
               ;;
 
+
             transfer)
+
               args+=(
                 --scope
                 transfer
               )
+
               ;;
+
 
             full)
+
+              # Nenhum argumento adicional.
+              # run.py executará a suíte inteira.
+
               ;;
 
+
             *)
+
               echo "::error::Unknown test scope: $scope"
               exit 1
+
               ;;
 
           esac
 
+
+          echo
           echo "============================================"
-          echo "Running ParaBank automation"
+          echo "Running ParaBank Automation"
           echo "============================================"
           echo "Scope   : $scope"
           echo "Browser : $browser"
+          echo "Mode    : headless"
           echo "============================================"
+          echo
+
+
+          # --------------------------------------------------
+          # Executa sem interromper imediatamente o workflow
+          # --------------------------------------------------
 
           set +e
 
@@ -276,19 +392,37 @@ jobs:
 
           set -e
 
+
+          # --------------------------------------------------
+          # Salva resultado para o step final
+          # --------------------------------------------------
+
           echo "exit_code=${test_exit_code}" >> "$GITHUB_OUTPUT"
 
-          echo
-          echo "Test exit code: ${test_exit_code}"
 
-          # O step termina com sucesso propositalmente.
-          # O status real será aplicado no Final test status.
+          echo
+          echo "============================================"
+          echo "Test execution finished"
+          echo "Exit code: ${test_exit_code}"
+          echo "============================================"
+          echo
+
+
+          # Não propagamos ainda o exit code.
+          #
+          # Precisamos gerar e salvar as evidências.
           exit 0
 
 
-      # ------------------------------------------------------
-      # Allure
-      # ------------------------------------------------------
+      # ======================================================
+      # ALLURE REPORT
+      #
+      # Allure 3 não aceita mais:
+      #
+      #   --clean
+      #
+      # Por isso removemos manualmente o relatório anterior.
+      # ======================================================
 
       - name: Generate Allure Report
         id: allure
@@ -297,11 +431,25 @@ jobs:
         run: |
           echo "Checking Allure results..."
 
+
+          # --------------------------------------------------
+          # Diretório inexistente
+          # --------------------------------------------------
+
           if [[ ! -d "reports/allure-results" ]]; then
+
             echo "No allure-results directory found."
+
             echo "generated=false" >> "$GITHUB_OUTPUT"
+
             exit 0
+
           fi
+
+
+          # --------------------------------------------------
+          # Diretório existe mas está vazio
+          # --------------------------------------------------
 
           if ! find reports/allure-results \
               -type f \
@@ -309,56 +457,118 @@ jobs:
               -quit | grep -q .; then
 
             echo "No Allure result files found."
+
             echo "generated=false" >> "$GITHUB_OUTPUT"
+
             exit 0
+
           fi
 
+
+          echo
           echo "Generating Allure Report..."
+          echo
+
+
+          # --------------------------------------------------
+          # Limpeza explícita
+          #
+          # Substitui o antigo:
+          #
+          #   allure generate --clean
+          #
+          # que não existe no Allure 3.
+          # --------------------------------------------------
+
+          rm -rf reports/allure-report
+
+
+          # --------------------------------------------------
+          # Geração Allure 3
+          # --------------------------------------------------
 
           allure generate \
             reports/allure-results \
-            --clean \
-            -o reports/allure-report
+            --output reports/allure-report
+
+
+          # --------------------------------------------------
+          # Validação
+          # --------------------------------------------------
+
+          if [[ ! -d "reports/allure-report" ]]; then
+
+            echo "::error::Allure Report directory was not generated."
+
+            echo "generated=false" >> "$GITHUB_OUTPUT"
+
+            exit 1
+
+          fi
+
 
           echo "generated=true" >> "$GITHUB_OUTPUT"
 
+
           echo
-          echo "Allure Report generated successfully."
+          echo "============================================"
+          echo "Allure Report generated successfully"
+          echo "============================================"
+          echo "Results: reports/allure-results"
+          echo "Report : reports/allure-report"
+          echo "============================================"
+          echo
 
 
-      # ------------------------------------------------------
-      # Artifacts - resultado bruto
-      # ------------------------------------------------------
+      # ======================================================
+      # ARTIFACT - ALLURE RESULTS
+      #
+      # Mantemos os resultados brutos para investigação e
+      # eventual regeneração do relatório.
+      # ======================================================
 
       - name: Upload Allure results
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: allure-results-${{ github.run_number }}
+
           path: reports/allure-results
+
           if-no-files-found: warn
+
           retention-days: 7
 
 
-      # ------------------------------------------------------
-      # Artifacts - relatório HTML
-      # ------------------------------------------------------
+      # ======================================================
+      # ARTIFACT - ALLURE HTML REPORT
+      # ======================================================
 
       - name: Upload Allure HTML Report
-        if: always() && steps.allure.outputs.generated == 'true'
+        if: >
+          always() &&
+          steps.allure.outputs.generated == 'true'
+
         uses: actions/upload-artifact@v7
+
         with:
           name: allure-report-${{ github.run_number }}
+
           path: reports/allure-report
+
           if-no-files-found: error
+
           retention-days: 14
 
 
-      # ------------------------------------------------------
-      # GitHub Pages
+      # ======================================================
+      # GITHUB PAGES
       #
-      # Publicamos somente a execução da MAIN.
-      # ------------------------------------------------------
+      # O relatório publicado representa a última execução
+      # da branch main.
+      #
+      # Não publicamos relatórios de PR ou execução manual.
+      # ======================================================
 
       - name: Configure GitHub Pages
         if: >
@@ -366,27 +576,46 @@ jobs:
           github.event_name == 'push' &&
           github.ref == 'refs/heads/main' &&
           steps.allure.outputs.generated == 'true'
+
         uses: actions/configure-pages@v6
 
 
       - name: Upload GitHub Pages artifact
         id: pages_upload
+
         if: >
           always() &&
           github.event_name == 'push' &&
           github.ref == 'refs/heads/main' &&
           steps.allure.outputs.generated == 'true'
+
         uses: actions/upload-pages-artifact@v5
+
         with:
           path: reports/allure-report
 
 
-      # ------------------------------------------------------
-      # Status final
+      # ======================================================
+      # RESULTADO FINAL
       #
-      # Agora fazemos o job refletir o resultado real
-      # dos testes.
-      # ------------------------------------------------------
+      # Somente agora propagamos o resultado real da suíte.
+      #
+      # Dessa forma:
+      #
+      # TEST FAIL
+      #     ↓
+      # screenshots
+      #     ↓
+      # allure-results
+      #     ↓
+      # allure-report
+      #     ↓
+      # artifacts
+      #     ↓
+      # pipeline = FAIL
+      #
+      # Isso preserva evidências sem esconder a falha.
+      # ======================================================
 
       - name: Final test status
         if: always()
@@ -394,22 +623,46 @@ jobs:
         run: |
           test_exit_code="${{ steps.tests.outputs.exit_code }}"
 
+
           if [[ -z "$test_exit_code" ]]; then
+
             echo "::error::Test execution did not return an exit code."
+
             exit 1
+
           fi
+
 
           if [[ "$test_exit_code" != "0" ]]; then
+
+            echo
             echo "::error::Automated tests failed."
-            echo "Exit code: $test_exit_code"
+            echo "Behave exit code: $test_exit_code"
+            echo
+
             exit "$test_exit_code"
+
           fi
 
+
+          echo
+          echo "============================================"
           echo "Automated tests passed successfully."
+          echo "============================================"
+          echo
 
 
   # ==========================================================
-  # CD - PUBLICAÇÃO DO ALLURE
+  # CD - PUBLICAÇÃO DO ALLURE REPORT
+  #
+  # Este job publica o relatório no GitHub Pages.
+  #
+  # Ele pode executar mesmo quando os testes falham, desde que
+  # o relatório tenha sido gerado e enviado ao Pages.
+  #
+  # Isso é proposital:
+  # um relatório de uma execução com falha é justamente uma
+  # das evidências mais úteis para investigação.
   # ==========================================================
 
   deploy-report:
@@ -418,24 +671,27 @@ jobs:
     needs:
       - test
 
-    # `always()` permite publicar inclusive o relatório
-    # de uma suíte que encontrou falhas.
-    #
-    # Isso é útil porque o relatório é justamente a
-    # evidência necessária para investigar a falha.
+
     if: >
       always() &&
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main' &&
       needs.test.outputs.pages_ready == 'success'
 
+
     runs-on: ubuntu-latest
+
 
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
 
+
     steps:
+
+      # ======================================================
+      # DEPLOY
+      # ======================================================
 
       - name: Deploy Allure Report to GitHub Pages
         id: deployment
