@@ -1,45 +1,172 @@
-from playwright.sync_api import Page, expect
+from playwright.sync_api import (
+    Page,
+    expect,
+)
+
 from pages.base_page import BasePage
 
+
 class TransferPage(BasePage):
-    def __init__(self, page: Page):
+    def __init__(
+        self,
+        page: Page,
+    ) -> None:
         super().__init__(page)
-        self.transfer_funds_link = page.locator("a[href*='transfer.htm']")
-        self.amount_input = page.locator("input#amount")
-        self.from_account_select = page.locator("select#fromAccountId")
-        self.to_account_select = page.locator("select#toAccountId")
-        self.transfer_button = page.locator("input[value='Transfer']")
-        self.transfer_complete_title = page.get_by_role("heading", name="Transfer Complete!")
-        self.transfer_amount_result = page.locator("span#amountResult")
-        self.from_account_result = page.locator("span#fromAccountIdResult")
-        self.to_account_result = page.locator("span#toAccountIdResult")
+
+        self.transfer_funds_link = (
+            page.get_by_role(
+                "link",
+                name="Transfer Funds",
+            )
+        )
+
+        self.amount_input = page.locator(
+            "#amount"
+        )
+
+        self.from_account_select = (
+            page.locator(
+                "#fromAccountId"
+            )
+        )
+
+        self.to_account_select = (
+            page.locator(
+                "#toAccountId"
+            )
+        )
+
+        self.transfer_button = (
+            page.get_by_role(
+                "button",
+                name="Transfer",
+            )
+        )
+
+        self.transfer_complete_title = (
+            page.get_by_role(
+                "heading",
+                name="Transfer Complete!",
+            )
+        )
+
+        self.transfer_amount_result = (
+            page.locator(
+                "#amountResult"
+            )
+        )
+
+        self.from_account_result = (
+            page.locator(
+                "#fromAccountIdResult"
+            )
+        )
+
+        self.to_account_result = (
+            page.locator(
+                "#toAccountIdResult"
+            )
+        )
+
+        self.error_panel = page.locator(
+            "#showError"
+        )
+
+        self.error_title = (
+            self.error_panel.locator(
+                "h1.title"
+            )
+        )
+
+        self.error_message = (
+            self.error_panel.locator(
+                "p.error"
+            )
+        )
 
     def open(self) -> None:
         self.transfer_funds_link.click()
-        self.page.wait_for_load_state("networkidle")
 
-    def transfer(self, amount: str, from_account_idx: int = 0, to_account_idx: int = 0) -> tuple[str, str]:
-        self.from_account_select.wait_for(state="visible")
-        # Aguarda o Parabank preencher os selects via AJAX
-        self.page.wait_for_function("document.querySelectorAll('select#fromAccountId option').length > 0")
+        expect(
+            self.amount_input
+        ).to_be_visible()
+
+        expect(
+            self.from_account_select
+            .locator("option")
+            .nth(1)
+        ).to_be_attached()
+
+        expect(
+            self.to_account_select
+            .locator("option")
+            .nth(1)
+        ).to_be_attached()
+
+    def transfer(
+        self,
+        amount: str,
+        from_account_id: int,
+        to_account_id: int,
+    ) -> None:
         self.amount_input.fill(amount)
 
-        from_options = self.from_account_select.locator("option").all_inner_texts()
-        to_options = self.to_account_select.locator("option").all_inner_texts()
+        self.from_account_select.select_option(
+            str(from_account_id)
+        )
 
-        from_acc = from_options[from_account_idx] if from_options else ""
-        to_acc = to_options[to_account_idx] if to_options else ""
+        self.to_account_select.select_option(
+            str(to_account_id)
+        )
 
-        self.from_account_select.select_option(value=from_acc)
-        self.to_account_select.select_option(value=to_acc)
         self.transfer_button.click()
-        return from_acc, to_acc
 
-    def validate_transfer_success(self, expected_amount: str, from_acc: str, to_acc: str) -> None:
-        expect(self.transfer_complete_title).to_be_visible()
-        expect(self.transfer_amount_result).to_have_text(f"${expected_amount}")
-        expect(self.from_account_result).to_have_text(from_acc)
-        expect(self.to_account_result).to_have_text(to_acc)
+    def validate_transfer_success(
+        self,
+        expected_amount: str,
+        from_account_id: int,
+        to_account_id: int,
+    ) -> None:
+        expect(
+            self.transfer_complete_title
+        ).to_be_visible()
 
-    def validate_transfer_error(self) -> None:
-        expect(self.transfer_complete_title).not_to_be_visible()
+        expect(
+            self.transfer_amount_result
+        ).to_have_text(
+            f"${expected_amount}"
+        )
+
+        expect(
+            self.from_account_result
+        ).to_have_text(
+            str(from_account_id)
+        )
+
+        expect(
+            self.to_account_result
+        ).to_have_text(
+            str(to_account_id)
+        )
+
+    def validate_transfer_error(
+        self,
+        expected_message: str,
+    ) -> None:
+        expect(
+            self.error_panel
+        ).to_be_visible()
+
+        expect(
+            self.error_title
+        ).to_have_text("Error!")
+
+        expect(
+            self.error_message
+        ).to_contain_text(
+            expected_message
+        )
+
+        expect(
+            self.transfer_complete_title
+        ).not_to_be_visible()

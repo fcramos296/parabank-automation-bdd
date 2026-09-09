@@ -1,22 +1,30 @@
-# Ambientes virtuais
+# Virtual environments
 .venv/
 venv/
 ENV/
 
-# Python Cache
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
+.pytest_cache/
+.ruff_cache/
 
-# Variáveis de ambiente com tokens/senhas
+# Environment / secrets
 .env
 
-# Relatórios e capturas de tela
+# Reports and test artifacts
 reports/allure-results/*
 reports/allure-report/
 !reports/allure-results/.gitkeep
 
-# Playwright
 test-results/
 playwright-report/
 blob-report/
+trace.zip
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

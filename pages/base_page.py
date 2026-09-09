@@ -1,15 +1,35 @@
-from playwright.sync_api import Page, Locator, expect
+from playwright.sync_api import (
+    Locator,
+    Page,
+    expect,
+)
+
+from config.settings import settings
+
 
 class BasePage:
-    def __init__(self, page: Page):
+    def __init__(
+        self,
+        page: Page,
+    ) -> None:
         self.page = page
 
-    def navigate_to(self, path: str = "") -> None:
-        from config.settings import settings
-        self.page.goto(f"{settings.BASE_URL}/{path}".strip("/"))
+    def navigate_to(
+        self,
+        path: str = "",
+    ) -> None:
+        url = (
+            f"{settings.BASE_URL.rstrip('/')}/"
+            f"{path.lstrip('/')}"
+        )
 
-    def get_element(self, selector: str) -> Locator:
-        return self.page.locator(selector)
+        self.page.goto(
+            url,
+            wait_until="domcontentloaded",
+        )
 
-    def wait_for_visible(self, locator: Locator) -> None:
+    @staticmethod
+    def wait_for_visible(
+        locator: Locator,
+    ) -> None:
         expect(locator).to_be_visible()
