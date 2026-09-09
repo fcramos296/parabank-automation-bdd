@@ -1,17 +1,14 @@
 name: ParaBank E2E
 
 on:
-  # Pull Requests para main executam apenas os smoke tests.
   pull_request:
     branches:
       - main
 
-  # Push na main executa a regressão completa.
   push:
     branches:
       - main
 
-  # Permite execução manual pela aba Actions.
   workflow_dispatch:
     inputs:
       scope:
@@ -37,24 +34,10 @@ on:
           - webkit
 
 
-# ============================================================
-# CONCURRENCY
-#
-# Evita execuções concorrentes desnecessárias para a mesma
-# branch ou Pull Request.
-# ============================================================
-
 concurrency:
   group: parabank-e2e-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
-
-# ============================================================
-# PERMISSIONS
-#
-# contents: checkout
-# pages / id-token: publicação do Allure no GitHub Pages
-# ============================================================
 
 permissions:
   contents: read
@@ -63,10 +46,6 @@ permissions:
   id-token: write
 
 
-# ============================================================
-# VARIÁVEIS GLOBAIS
-# ============================================================
-
 env:
   PYTHONUNBUFFERED: "1"
 
@@ -74,67 +53,48 @@ env:
 
   HEADLESS: "true"
 
+  PW_TIMEOUT_MS: "10000"
+  PW_NAVIGATION_TIMEOUT_MS: "15000"
+
+  # O ambiente remoto pode responder mais lentamente que o local.
+  REQUEST_TIMEOUT_SECONDS: "30"
+
   BACKEND_TRANSPORT: "proxy"
   BROWSER_TRANSPORT: "direct"
 
   BLOCK_NONESSENTIAL_RESOURCES: "true"
   UI_SCENARIO_DELAY_SECONDS: "2.0"
 
-  # Nunca armazenar o token diretamente no YAML.
+  SCRAPE_DO_API_URL: "https://api.scrape.do/"
+  SCRAPE_DO_PROXY_URL: "http://proxy.scrape.do:8080"
+  SCRAPE_DO_BROWSER_PROXY_PARAMS: "render=false"
+
   SCRAPE_DO_TOKEN: ${{ secrets.SCRAPE_DO_TOKEN }}
 
 
 jobs:
 
-  # ==========================================================
-  # CI - TESTES AUTOMATIZADOS
-  # ==========================================================
-
   test:
     name: E2E Tests
-
     runs-on: ubuntu-latest
-
     timeout-minutes: 30
 
-    # Informa ao job de deploy se o artifact do Pages
-    # foi criado corretamente.
     outputs:
       pages_ready: ${{ steps.pages_upload.outcome }}
 
-
     steps:
-
-      # ======================================================
-      # CHECKOUT
-      # ======================================================
 
       - name: Checkout repository
         uses: actions/checkout@v7
 
 
-      # ======================================================
-      # PYTHON
-      # ======================================================
-
       - name: Setup Python
         uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-
-          # Cache das dependências pip.
           cache: "pip"
           cache-dependency-path: requirements.txt
 
-
-      # ======================================================
-      # SCRAPE.DO SECRET
-      #
-      # O CI não utiliza .env.
-      #
-      # configure_env.py encontrará SCRAPE_DO_TOKEN através
-      # da variável de ambiente fornecida pelo GitHub Secret.
-      # ======================================================
 
       - name: Validate SCRAPE_DO_TOKEN
         shell: bash
@@ -149,10 +109,6 @@ jobs:
           echo "The secret value will not be displayed."
 
 
-      # ======================================================
-      # DEFINE ESCOPO E BROWSER
-      # ======================================================
-
       - name: Resolve execution configuration
         id: execution
         shell: bash
@@ -160,45 +116,23 @@ jobs:
           scope="full"
           browser="chromium"
 
-          # --------------------------------------------------
-          # Pull Request
-          #
-          # Feedback rápido: somente smoke tests.
-          # --------------------------------------------------
-
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             scope="smoke"
             browser="chromium"
           fi
-
-
-          # --------------------------------------------------
-          # Push main
-          #
-          # Regressão completa.
-          # --------------------------------------------------
 
           if [[ "${{ github.event_name }}" == "push" ]]; then
             scope="full"
             browser="chromium"
           fi
 
-
-          # --------------------------------------------------
-          # Execução manual
-          #
-          # Usuário escolhe scope e browser.
-          # --------------------------------------------------
-
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             scope="${{ inputs.scope }}"
             browser="${{ inputs.browser }}"
           fi
 
-
           echo "scope=${scope}" >> "$GITHUB_OUTPUT"
           echo "browser=${browser}" >> "$GITHUB_OUTPUT"
-
 
           echo
           echo "============================================"
@@ -211,23 +145,12 @@ jobs:
           echo
 
 
-      # ======================================================
-      # DEPENDÊNCIAS PYTHON
-      # ======================================================
-
       - name: Install Python dependencies
         shell: bash
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-
-      # ======================================================
-      # PLAYWRIGHT
-      #
-      # --with-deps instala também as bibliotecas Linux
-      # necessárias pelo browser.
-      # ======================================================
 
       - name: Install Playwright browser
         shell: bash
@@ -241,21 +164,11 @@ jobs:
             "${browser}"
 
 
-      # ======================================================
-      # NODE.JS
-      #
-      # Allure Report 3 utiliza Node.js.
-      # ======================================================
-
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version: "24"
 
-
-      # ======================================================
-      # ALLURE REPORT 3
-      # ======================================================
 
       - name: Install Allure Report
         shell: bash
@@ -269,24 +182,6 @@ jobs:
           allure --version
 
 
-      # ======================================================
-      # EXECUÇÃO DOS TESTES
-      #
-      # Importante:
-      #
-      # O step NÃO falha imediatamente quando Behave retorna
-      # erro.
-      #
-      # Guardamos o exit code e continuamos para:
-      #
-      # - gerar Allure;
-      # - salvar screenshots;
-      # - publicar artifacts;
-      # - publicar relatório.
-      #
-      # No fim do job o resultado real dos testes será aplicado.
-      # ======================================================
-
       - name: Run automated tests
         id: tests
         shell: bash
@@ -294,80 +189,49 @@ jobs:
           scope="${{ steps.execution.outputs.scope }}"
           browser="${{ steps.execution.outputs.browser }}"
 
-
-          # --------------------------------------------------
-          # Argumentos básicos
-          # --------------------------------------------------
-
           args=(
             --skip-setup
             --browser "$browser"
           )
 
-
-          # --------------------------------------------------
-          # Escopo
-          # --------------------------------------------------
-
           case "$scope" in
 
             smoke)
-
               args+=(
                 --tags
                 "@smoke"
               )
-
               ;;
 
-
             login)
-
               args+=(
                 --scope
                 login
               )
-
               ;;
 
-
             registration)
-
               args+=(
                 --scope
                 registration
               )
-
               ;;
 
-
             transfer)
-
               args+=(
                 --scope
                 transfer
               )
-
               ;;
-
 
             full)
-
-              # Nenhum argumento adicional.
-              # run.py executará a suíte inteira.
-
               ;;
-
 
             *)
-
               echo "::error::Unknown test scope: $scope"
               exit 1
-
               ;;
-
           esac
-
 
           echo
           echo "============================================"
@@ -379,11 +243,6 @@ jobs:
           echo "============================================"
           echo
 
-
-          # --------------------------------------------------
-          # Executa sem interromper imediatamente o workflow
-          # --------------------------------------------------
-
           set +e
 
           python scripts/run.py "${args[@]}"
@@ -392,13 +251,7 @@ jobs:
 
           set -e
 
-
-          # --------------------------------------------------
-          # Salva resultado para o step final
-          # --------------------------------------------------
-
           echo "exit_code=${test_exit_code}" >> "$GITHUB_OUTPUT"
-
 
           echo
           echo "============================================"
@@ -407,22 +260,9 @@ jobs:
           echo "============================================"
           echo
 
-
-          # Não propagamos ainda o exit code.
-          #
-          # Precisamos gerar e salvar as evidências.
+          # Mantém o workflow vivo para gerar evidências.
           exit 0
 
-
-      # ======================================================
-      # ALLURE REPORT
-      #
-      # Allure 3 não aceita mais:
-      #
-      #   --clean
-      #
-      # Por isso removemos manualmente o relatório anterior.
-      # ======================================================
 
       - name: Generate Allure Report
         id: allure
@@ -431,25 +271,11 @@ jobs:
         run: |
           echo "Checking Allure results..."
 
-
-          # --------------------------------------------------
-          # Diretório inexistente
-          # --------------------------------------------------
-
           if [[ ! -d "reports/allure-results" ]]; then
-
             echo "No allure-results directory found."
-
             echo "generated=false" >> "$GITHUB_OUTPUT"
-
             exit 0
-
           fi
-
-
-          # --------------------------------------------------
-          # Diretório existe mas está vazio
-          # --------------------------------------------------
 
           if ! find reports/allure-results \
               -type f \
@@ -457,58 +283,27 @@ jobs:
               -quit | grep -q .; then
 
             echo "No Allure result files found."
-
             echo "generated=false" >> "$GITHUB_OUTPUT"
-
             exit 0
-
           fi
-
 
           echo
           echo "Generating Allure Report..."
           echo
 
-
-          # --------------------------------------------------
-          # Limpeza explícita
-          #
-          # Substitui o antigo:
-          #
-          #   allure generate --clean
-          #
-          # que não existe no Allure 3.
-          # --------------------------------------------------
-
           rm -rf reports/allure-report
-
-
-          # --------------------------------------------------
-          # Geração Allure 3
-          # --------------------------------------------------
 
           allure generate \
             reports/allure-results \
             --output reports/allure-report
 
-
-          # --------------------------------------------------
-          # Validação
-          # --------------------------------------------------
-
-          if [[ ! -d "reports/allure-report" ]]; then
-
-            echo "::error::Allure Report directory was not generated."
-
+          if [[ ! -f "reports/allure-report/index.html" ]]; then
+            echo "::error::Allure Report was not generated correctly."
             echo "generated=false" >> "$GITHUB_OUTPUT"
-
             exit 1
-
           fi
 
-
           echo "generated=true" >> "$GITHUB_OUTPUT"
-
 
           echo
           echo "============================================"
@@ -517,105 +312,68 @@ jobs:
           echo "Results: reports/allure-results"
           echo "Report : reports/allure-report"
           echo "============================================"
-          echo
 
-
-      # ======================================================
-      # ARTIFACT - ALLURE RESULTS
-      #
-      # Mantemos os resultados brutos para investigação e
-      # eventual regeneração do relatório.
-      # ======================================================
 
       - name: Upload Allure results
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: allure-results-${{ github.run_number }}
-
           path: reports/allure-results
-
           if-no-files-found: warn
-
           retention-days: 7
 
-
-      # ======================================================
-      # ARTIFACT - ALLURE HTML REPORT
-      # ======================================================
 
       - name: Upload Allure HTML Report
         if: >
           always() &&
           steps.allure.outputs.generated == 'true'
-
         uses: actions/upload-artifact@v7
-
         with:
           name: allure-report-${{ github.run_number }}
-
           path: reports/allure-report
-
           if-no-files-found: error
-
           retention-days: 14
 
 
-      # ======================================================
-      # GITHUB PAGES
+      # GitHub Pages é opcional.
       #
-      # O relatório publicado representa a última execução
-      # da branch main.
-      #
-      # Não publicamos relatórios de PR ou execução manual.
-      # ======================================================
-
+      # Caso ainda não esteja habilitado em Settings -> Pages,
+      # este step pode falhar sem derrubar o CI.
       - name: Configure GitHub Pages
+        id: pages_config
+        continue-on-error: true
         if: >
           always() &&
           github.event_name == 'push' &&
           github.ref == 'refs/heads/main' &&
           steps.allure.outputs.generated == 'true'
-
         uses: actions/configure-pages@v6
+
+
+      - name: Warn when GitHub Pages is unavailable
+        if: >
+          always() &&
+          steps.pages_config.outcome == 'failure'
+        shell: bash
+        run: |
+          echo "::warning::GitHub Pages is not enabled for this repository."
+          echo "::warning::Go to Settings > Pages and select GitHub Actions as Source."
+          echo "The Allure Report is still available as a workflow artifact."
 
 
       - name: Upload GitHub Pages artifact
         id: pages_upload
-
         if: >
           always() &&
           github.event_name == 'push' &&
           github.ref == 'refs/heads/main' &&
-          steps.allure.outputs.generated == 'true'
-
+          steps.allure.outputs.generated == 'true' &&
+          steps.pages_config.outcome == 'success'
         uses: actions/upload-pages-artifact@v5
-
         with:
           path: reports/allure-report
 
-
-      # ======================================================
-      # RESULTADO FINAL
-      #
-      # Somente agora propagamos o resultado real da suíte.
-      #
-      # Dessa forma:
-      #
-      # TEST FAIL
-      #     ↓
-      # screenshots
-      #     ↓
-      # allure-results
-      #     ↓
-      # allure-report
-      #     ↓
-      # artifacts
-      #     ↓
-      # pipeline = FAIL
-      #
-      # Isso preserva evidências sem esconder a falha.
-      # ======================================================
 
       - name: Final test status
         if: always()
@@ -623,47 +381,25 @@ jobs:
         run: |
           test_exit_code="${{ steps.tests.outputs.exit_code }}"
 
-
           if [[ -z "$test_exit_code" ]]; then
-
             echo "::error::Test execution did not return an exit code."
-
             exit 1
-
           fi
 
-
           if [[ "$test_exit_code" != "0" ]]; then
-
             echo
             echo "::error::Automated tests failed."
             echo "Behave exit code: $test_exit_code"
             echo
 
             exit "$test_exit_code"
-
           fi
-
 
           echo
           echo "============================================"
           echo "Automated tests passed successfully."
           echo "============================================"
-          echo
 
-
-  # ==========================================================
-  # CD - PUBLICAÇÃO DO ALLURE REPORT
-  #
-  # Este job publica o relatório no GitHub Pages.
-  #
-  # Ele pode executar mesmo quando os testes falham, desde que
-  # o relatório tenha sido gerado e enviado ao Pages.
-  #
-  # Isso é proposital:
-  # um relatório de uma execução com falha é justamente uma
-  # das evidências mais úteis para investigação.
-  # ==========================================================
 
   deploy-report:
     name: Publish Allure Report
@@ -671,27 +407,19 @@ jobs:
     needs:
       - test
 
-
     if: >
       always() &&
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main' &&
       needs.test.outputs.pages_ready == 'success'
 
-
     runs-on: ubuntu-latest
-
 
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
 
-
     steps:
-
-      # ======================================================
-      # DEPLOY
-      # ======================================================
 
       - name: Deploy Allure Report to GitHub Pages
         id: deployment

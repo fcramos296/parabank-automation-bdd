@@ -21,8 +21,12 @@ class Settings(BaseSettings):
     ] = "chromium"
 
     PW_TIMEOUT_MS: int = 10_000
+
     PW_NAVIGATION_TIMEOUT_MS: int = 15_000
-    REQUEST_TIMEOUT_SECONDS: float = 15.0
+
+    # O ambiente público pode apresentar latência,
+    # principalmente quando acessado através do Scrape.do.
+    REQUEST_TIMEOUT_SECONDS: float = 30.0
 
     BACKEND_TRANSPORT: Literal[
         "direct",
@@ -99,6 +103,12 @@ class Settings(BaseSettings):
                 "SCRAPE_DO_TOKEN is required "
                 "when a Scrape.do transport "
                 "is enabled."
+            )
+
+        if self.REQUEST_TIMEOUT_SECONDS <= 0:
+            raise ValueError(
+                "REQUEST_TIMEOUT_SECONDS "
+                "must be greater than zero."
             )
 
         if self.UI_SCENARIO_DELAY_SECONDS < 0:

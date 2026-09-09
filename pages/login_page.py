@@ -30,10 +30,14 @@ class LoginPage(BasePage):
             "p.error"
         )
 
-        self.account_overview_title = (
+        self.authenticated_panel = page.locator(
+            "#leftPanel"
+        )
+
+        self.account_services_title = (
             page.get_by_role(
                 "heading",
-                name="Accounts Overview",
+                name="Account Services",
             )
         )
 
@@ -45,10 +49,16 @@ class LoginPage(BasePage):
         )
 
     def open(self) -> None:
-        self.navigate_to("index.htm")
+        self.navigate_to(
+            "index.htm"
+        )
 
         expect(
             self.username_input
+        ).to_be_visible()
+
+        expect(
+            self.password_input
         ).to_be_visible()
 
     def login(
@@ -56,16 +66,32 @@ class LoginPage(BasePage):
         username: str,
         password: str,
     ) -> None:
-        self.username_input.fill(username)
-        self.password_input.fill(password)
+        self.username_input.fill(
+            username
+        )
+
+        self.password_input.fill(
+            password
+        )
 
         self.login_button.click()
 
     def validate_login_success(
         self,
     ) -> None:
+        """
+        Valida autenticação sem depender do carregamento
+        do serviço Accounts Overview.
+        """
+
         expect(
-            self.account_overview_title
+            self.authenticated_panel
+        ).to_contain_text(
+            "Welcome"
+        )
+
+        expect(
+            self.account_services_title
         ).to_be_visible()
 
         expect(
@@ -85,3 +111,25 @@ class LoginPage(BasePage):
         ).to_contain_text(
             expected_message
         )
+
+    def validate_unauthenticated_with_error(
+        self,
+    ) -> None:
+        """
+        Valida que a tentativa de autenticação inválida
+        produziu uma resposta de erro.
+
+        O ambiente público do ParaBank pode renderizar
+        elementos inconsistentes do menu lateral, inclusive
+        o link Log Out, mesmo após uma tentativa inválida.
+        Por isso o estado negativo é validado pelo retorno
+        explícito de erro da aplicação.
+        """
+
+        expect(
+            self.error_message.first
+        ).to_be_visible()
+
+        expect(
+            self.error_message.first
+        ).not_to_have_text("")

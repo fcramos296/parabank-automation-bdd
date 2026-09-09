@@ -13,7 +13,9 @@ from utils.test_data import (
 
 
 @given("que estou na tela de login")
-def step_open_login(context) -> None:
+def step_open_login(
+    context,
+) -> None:
     context.login_page = LoginPage(
         context.page
     )
@@ -29,7 +31,9 @@ def step_create_valid_user_via_backend(
     context,
 ) -> None:
     context.seeded_customer = (
-        build_customer("login")
+        build_customer(
+            "login"
+        )
     )
 
     context.api_client.register_user(
@@ -65,7 +69,9 @@ def step_login_with_params(
 ) -> None:
     if username == "inexistente":
         username_to_use = (
-            unique_username("invalid")
+            unique_username(
+                "invalid"
+            )
         )
     else:
         username_to_use = username
@@ -80,13 +86,23 @@ use_step_matcher("parse")
 
 
 @then(
-    "sou direcionado para a tela "
-    "de visão geral da conta"
+    "devo estar autenticado e "
+    "visualizar os serviços da conta"
 )
 def step_validate_login_success(
     context,
 ) -> None:
     context.login_page.validate_login_success()
+
+
+@then(
+    "a tentativa de autenticação deve ser "
+    "rejeitada com uma mensagem de erro"
+)
+def step_validate_invalid_login(
+    context,
+) -> None:
+    context.login_page.validate_unauthenticated_with_error()
 
 
 @then(

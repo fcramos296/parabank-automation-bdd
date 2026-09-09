@@ -525,7 +525,6 @@ generate_allure_report() {
     if ! run_allure \
         generate \
         "$ALLURE_RESULTS" \
-        --clean \
         -o "$ALLURE_REPORT"; then
 
         echo

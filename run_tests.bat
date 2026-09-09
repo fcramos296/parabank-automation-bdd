@@ -897,15 +897,13 @@ if "!ALLURE_MODE!"=="npx" (
 
     call npx --yes allure generate ^
         "%ALLURE_RESULTS%" ^
-        --clean ^
-        -o "%ALLURE_REPORT%"
+        --output "%ALLURE_REPORT%"
 
 ) else (
 
     call allure generate ^
         "%ALLURE_RESULTS%" ^
-        --clean ^
-        -o "%ALLURE_REPORT%"
+        --output "%ALLURE_REPORT%"
 )
 
 

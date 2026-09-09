@@ -55,6 +55,10 @@ class ParabankApiClient:
         ),
     }
 
+    JSON_HEADERS = {
+        "Accept": "application/json",
+    }
+
     def __init__(self) -> None:
         self.base_url = (
             settings.BASE_URL.rstrip("/")
@@ -268,11 +272,8 @@ class ParabankApiClient:
         """
         Executes ParaBank registration directly.
 
-        Important:
         ParaBank's registration flow depends on
-        HTTP session state.
-
-        Therefore the correct flow is:
+        HTTP session state:
 
             GET /register.htm
                     ↓
@@ -301,9 +302,6 @@ class ParabankApiClient:
             )
         )
 
-        # In auto mode we need to return this response
-        # untouched so register_user() can decide whether
-        # to restart the complete flow through Scrape.do.
         if (
             bootstrap_response.status_code
             in self.transport
@@ -528,9 +526,7 @@ class ParabankApiClient:
             self.transport.request(
                 "GET",
                 url,
-                headers={
-                    "Accept": "application/json",
-                },
+                headers=self.JSON_HEADERS,
             )
         )
 
@@ -580,9 +576,7 @@ class ParabankApiClient:
             self.transport.request(
                 "GET",
                 url,
-                headers={
-                    "Accept": "application/json",
-                },
+                headers=self.JSON_HEADERS,
             )
         )
 
@@ -605,6 +599,12 @@ class ParabankApiClient:
                 "response for customer "
                 f"{customer_id}: "
                 f"{accounts!r}"
+            )
+
+        if not accounts:
+            raise AssertionError(
+                "No accounts were returned "
+                f"for customer {customer_id}."
             )
 
         return accounts
@@ -643,9 +643,7 @@ class ParabankApiClient:
                         from_account_id
                     ),
                 },
-                headers={
-                    "Accept": "application/json",
-                },
+                headers=self.JSON_HEADERS,
             )
         )
 
@@ -693,9 +691,7 @@ class ParabankApiClient:
             self.transport.request(
                 "GET",
                 url,
-                headers={
-                    "Accept": "application/json",
-                },
+                headers=self.JSON_HEADERS,
             )
         )
 

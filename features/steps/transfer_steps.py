@@ -27,6 +27,8 @@ def step_auth_with_two_accounts(
         "transfer"
     )
 
+    context.transfer_customer = customer
+
     context.api_client.register_user(
         customer.registration_payload()
     )
@@ -40,6 +42,10 @@ def step_auth_with_two_accounts(
 
     customer_id = int(
         customer_data["id"]
+    )
+
+    context.transfer_customer_id = (
+        customer_id
     )
 
     accounts = (
@@ -187,14 +193,22 @@ def step_assert_balances_after_transfer(
 
     context.api_client\
         .wait_for_account_balance(
-            context.from_account_id,
-            expected_from,
+            account_id=(
+                context.from_account_id
+            ),
+            expected_balance=(
+                expected_from
+            ),
         )
 
     context.api_client\
         .wait_for_account_balance(
-            context.to_account_id,
-            expected_to,
+            account_id=(
+                context.to_account_id
+            ),
+            expected_balance=(
+                expected_to
+            ),
         )
 
 
@@ -246,12 +260,20 @@ def step_assert_balances_unchanged(
 ) -> None:
     context.api_client\
         .wait_for_account_balance(
-            context.from_account_id,
-            context.from_balance_before,
+            account_id=(
+                context.from_account_id
+            ),
+            expected_balance=(
+                context.from_balance_before
+            ),
         )
 
     context.api_client\
         .wait_for_account_balance(
-            context.to_account_id,
-            context.to_balance_before,
+            account_id=(
+                context.to_account_id
+            ),
+            expected_balance=(
+                context.to_balance_before
+            ),
         )
