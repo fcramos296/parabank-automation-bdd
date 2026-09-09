@@ -1,0 +1,22 @@
+# Ambientes virtuais
+.venv/
+venv/
+ENV/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Variáveis de ambiente com tokens/senhas
+.env
+
+# Relatórios e capturas de tela
+reports/allure-results/*
+reports/allure-report/
+!reports/allure-results/.gitkeep
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
