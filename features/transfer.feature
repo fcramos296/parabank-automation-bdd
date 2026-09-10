@@ -11,28 +11,28 @@ Funcionalidade: Transferência de Fundos
 
   @smoke
   Cenário: Transferência de fundos entre contas distintas realizada com sucesso
-    E navego para a tela de transferência de fundos
+    Dado navego para a tela de transferência de fundos
     Quando realizo a transferência da quantia de "17.31" entre contas distintas
     Então a transferência deve ser concluída exibindo o valor "17.31" e as contas envolvidas
     E os lançamentos de débito e crédito devem registrar a transferência
     E os saldos das duas contas devem refletir a transferência
 
   Cenário: Transferência do menor valor monetário com duas casas decimais
-    E navego para a tela de transferência de fundos
+    Dado navego para a tela de transferência de fundos
     Quando realizo a transferência da quantia de "0.01" entre contas distintas
     Então a transferência deve ser concluída exibindo o valor "0.01" e as contas envolvidas
     E os lançamentos de débito e crédito devem registrar a transferência
     E os saldos das duas contas devem refletir a transferência
 
   Cenário: Transferência no sentido inverso entre as duas contas
-    E navego para a tela de transferência de fundos
+    Dado navego para a tela de transferência de fundos
     Quando realizo a transferência da quantia de "25.00" da segunda conta para a primeira
     Então a transferência deve ser concluída exibindo o valor "25.00" e as contas envolvidas
     E os lançamentos de débito e crédito devem registrar a transferência
     E os saldos das duas contas devem refletir a transferência
 
   Cenário: Transferência de todo o saldo disponível da conta de origem
-    E navego para a tela de transferência de fundos
+    Dado navego para a tela de transferência de fundos
     Quando transfiro todo o saldo disponível da conta de origem
     Então a transferência do saldo total deve ser concluída entre as contas
     E os lançamentos de débito e crédito devem registrar a transferência
@@ -46,7 +46,7 @@ Funcionalidade: Transferência de Fundos
 
   @known_defect
   Esquema do Cenário: Entrada monetária inválida é rejeitada sem alterar estado
-    E navego para a tela de transferência de fundos
+    Dado navego para a tela de transferência de fundos
     Quando realizo a tentativa de transferência com valor "<valor>"
     Então a transferência deve ser rejeitada sem confirmação de sucesso
     E nenhuma transação deve ser criada para a tentativa rejeitada
