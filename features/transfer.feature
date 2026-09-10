@@ -1,4 +1,5 @@
 # language: pt
+
 @ui @transfer
 Funcionalidade: Transferência de Fundos
   Como um correntista autenticado
@@ -15,6 +16,11 @@ Funcionalidade: Transferência de Fundos
     Então a transferência deve ser concluída exibindo o valor "17.31" e as contas envolvidas
     E os lançamentos de débito e crédito devem registrar a transferência
 
+  Cenário: Transferência do menor valor monetário com duas casas decimais
+    Quando realizo a transferência da quantia de "0.01" entre contas distintas
+    Então a transferência deve ser concluída exibindo o valor "0.01" e as contas envolvidas
+    E os lançamentos de débito e crédito devem registrar a transferência
+
   Esquema do Cenário: Transferência com formato de valor inválido
     Quando realizo a tentativa de transferência com valor "<valor>"
     Então o sistema deve apresentar o erro de transferência "An internal error has occurred and has been logged."
@@ -23,3 +29,4 @@ Funcionalidade: Transferência de Fundos
       | valor       |
       |             |
       | valor_texto |
+      | 10,50       |
