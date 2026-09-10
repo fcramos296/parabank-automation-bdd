@@ -191,7 +191,7 @@ Page Objects              Backend ParaBank
 │   └── parabank_api_client.py
 ├── utils/
 │   └── test_data.py
-├── allurerc.mjs
+├── allurerc.yml
 ├── behave.ini
 ├── compose.yaml
 ├── requirements.txt
@@ -389,23 +389,25 @@ O projeto utiliza **Allure Report 3** com o **Awesome plugin**.
 Configuração:
 
 ```text
-allurerc.mjs
+allurerc.yml
 ```
 
 O relatório foi personalizado com:
 
-- logo Topaz;
+- identidade visual e logo Topaz;
 - tema escuro;
-- interface em português;
-- título próprio do projeto;
-- informações de projeto, ambiente, escopo e browser;
+- título próprio da entrega;
+- informações de projeto, ambiente e stack;
 - labels de `epic`, `feature`, browser, ambiente, layer e severity;
-- identificação do GitHub Actions quando gerado pelo CI;
 - categorias específicas para timeout, falha funcional e falha de automação/infraestrutura;
+- ordenação inicial por status;
+- expansão automática apenas do contexto relevante em falhas;
 - metadata do ambiente de execução;
 - screenshot automático em falhas;
 - URL atual anexada em falhas;
 - erros do console do navegador anexados quando disponíveis.
+
+A configuração é estática (`YAML`) para funcionar tanto com instalações globais do Allure CLI quanto no GitHub Actions, evitando dependência de um projeto Node.js apenas para gerar o relatório.
 
 Resultados brutos:
 
@@ -418,7 +420,7 @@ Gerar o HTML manualmente:
 ```bash
 allure generate \
   reports/allure-results \
-  --config ./allurerc.mjs \
+  --config ./allurerc.yml \
   --output reports/allure-report
 ```
 
