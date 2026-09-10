@@ -15,6 +15,18 @@ Funcionalidade: Autenticação e Encerramento de Sessão
     Quando informo as credenciais válidas desse usuário
     Então devo estar autenticado e visualizar os serviços da conta
 
+  Cenário: Sessão autenticada permanece válida após recarregar a página
+    Dado que existe um usuário exclusivo cadastrado para autenticação
+    Quando informo as credenciais válidas desse usuário
+    E recarrego a página autenticada
+    Então devo estar autenticado e visualizar os serviços da conta
+
+  Cenário: Login válido é permitido após tentativa anterior com senha incorreta
+    Dado que existe um usuário exclusivo cadastrado para autenticação
+    Quando realizo login com esse usuário e senha "wrong_pass"
+    E tento novamente com as credenciais válidas desse usuário
+    Então devo estar autenticado e visualizar os serviços da conta
+
   Cenário: Falha de login com usuário inexistente
     Quando realizo login com usuário "inexistente" e senha "wrong_pass"
     Então devo visualizar a mensagem de erro de autenticação "The username and password could not be verified."
