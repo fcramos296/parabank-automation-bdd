@@ -41,10 +41,10 @@ Funcionalidade: Autenticação e Encerramento de Sessão
     Então devo visualizar a mensagem de erro de autenticação "<mensagem_erro>"
 
     Exemplos:
-      | usuario       | senha | mensagem_erro                         |
-      |               | 12345 | Please enter a username and password. |
-      | user_sem_pass |       | Please enter a username and password. |
-      |               |       | Please enter a username and password. |
+      | usuario       | senha   | mensagem_erro                         |
+      | [vazio]       | 12345   | Please enter a username and password. |
+      | user_sem_pass | [vazio] | Please enter a username and password. |
+      | [vazio]       | [vazio] | Please enter a username and password. |
 
   Cenário: Logout encerra a sessão autenticada
     Dado que existe um usuário exclusivo cadastrado para autenticação

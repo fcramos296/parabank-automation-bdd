@@ -53,11 +53,7 @@ class CustomerData:
 def unique_username(
     prefix: str = "qa",
 ) -> str:
-    safe_prefix = "".join(
-        char
-        for char in prefix.lower()
-        if char.isalnum()
-    )[:8] or "qa"
+    safe_prefix = "".join(char for char in prefix.lower() if char.isalnum())[:8] or "qa"
 
     return f"{safe_prefix}_{uuid4().hex[:10]}"
 
@@ -67,9 +63,7 @@ def unique_username_exact(
     prefix: str = "qa",
 ) -> str:
     if length < 1:
-        raise ValueError(
-            "Username length must be greater than zero."
-        )
+        raise ValueError("Username length must be greater than zero.")
 
     if length > MAX_CREDENTIAL_LENGTH:
         raise ValueError(
@@ -77,16 +71,9 @@ def unique_username_exact(
             f"credential limit of {MAX_CREDENTIAL_LENGTH}."
         )
 
-    safe_prefix = "".join(
-        char
-        for char in prefix.lower()
-        if char.isalnum()
-    ) or "qa"
+    safe_prefix = "".join(char for char in prefix.lower() if char.isalnum()) or "qa"
 
-    seed = (
-        safe_prefix
-        + uuid4().hex
-    )
+    seed = safe_prefix + uuid4().hex
 
     if len(seed) < length:
         seed += uuid4().hex
@@ -97,9 +84,7 @@ def unique_username_exact(
 def unique_ssn() -> str:
     number = int(uuid4().hex[:12], 16)
 
-    return str(
-        number % 1_000_000_000
-    ).zfill(9)
+    return str(number % 1_000_000_000).zfill(9)
 
 
 def build_customer(

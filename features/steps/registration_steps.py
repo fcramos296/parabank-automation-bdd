@@ -20,16 +20,10 @@ def _is_checking_account(
     raw_type = account.get("type")
 
     if isinstance(raw_type, str):
-        return (
-            raw_type.strip().upper()
-            == AccountType.CHECKING.name
-        )
+        return raw_type.strip().upper() == AccountType.CHECKING.name
 
     try:
-        return (
-            int(raw_type)
-            == int(AccountType.CHECKING)
-        )
+        return int(raw_type) == int(AccountType.CHECKING)
     except (
         TypeError,
         ValueError,
@@ -41,57 +35,36 @@ def _is_checking_account(
 def step_open_registration(
     context,
 ) -> None:
-    context.register_page = RegisterPage(
-        context.page
-    )
+    context.register_page = RegisterPage(context.page)
 
     context.register_page.open()
 
 
-@when(
-    "preencho o formulário de cadastro "
-    "com dados dinâmicos válidos"
-)
+@when("preencho o formulário de cadastro com dados dinâmicos válidos")
 def step_fill_valid_registration(
     context,
 ) -> None:
-    context.current_customer = (
-        build_customer("reg")
-    )
+    context.current_customer = build_customer("reg")
 
-    context.register_page.fill_registration_form(
-        context.current_customer.ui_data()
-    )
+    context.register_page.fill_registration_form(context.current_customer.ui_data())
 
 
-@when(
-    "preencho o formulário de cadastro "
-    "com dados válidos sem informar telefone"
-)
+@when("preencho o formulário de cadastro com dados válidos sem informar telefone")
 def step_fill_registration_without_phone(
     context,
 ) -> None:
-    context.current_customer = (
-        build_customer("nophone")
-    )
+    context.current_customer = build_customer("nophone")
 
-    data = (
-        context.current_customer.ui_data()
-    )
+    data = context.current_customer.ui_data()
 
     data["phone"] = ""
 
     context.current_customer_data = data
 
-    context.register_page.fill_registration_form(
-        data
-    )
+    context.register_page.fill_registration_form(data)
 
 
-@when(
-    "preencho o cadastro com username e senha "
-    "de 20 caracteres"
-)
+@when("preencho o cadastro com username e senha de 20 caracteres")
 def step_fill_registration_at_credential_limit(
     context,
 ) -> None:
@@ -108,16 +81,10 @@ def step_fill_registration_at_credential_limit(
         password=password,
     )
 
-    context.register_page.fill_registration_form(
-        context.current_customer.ui_data()
-    )
+    context.register_page.fill_registration_form(context.current_customer.ui_data())
 
 
-@when(
-    'preencho o formulário informando '
-    'a senha "{password}" '
-    'e confirmação "{confirm}"'
-)
+@when('preencho o formulário informando a senha "{password}" e confirmação "{confirm}"')
 def step_fill_mismatched_password(
     context,
     password: str,
@@ -132,83 +99,55 @@ def step_fill_mismatched_password(
 
     data["confirm_password"] = confirm
 
-    context.register_page.fill_registration_form(
-        data
-    )
+    context.register_page.fill_registration_form(data)
 
 
-@given(
-    "que existe um usuário previamente "
-    "provisionado via backend"
-)
+@given("que existe um usuário previamente provisionado via backend")
 def step_seed_user_backend(
     context,
 ) -> None:
-    context.existing_customer = (
-        build_customer("existing")
-    )
+    context.existing_customer = build_customer("existing")
 
-    context.api_client.register_user(
-        context.existing_customer
-        .registration_payload()
-    )
+    context.api_client.register_user(context.existing_customer.registration_payload())
 
 
-@when(
-    "preencho o formulário de cadastro "
-    "utilizando esse username"
-)
+@when("preencho o formulário de cadastro utilizando esse username")
 def step_fill_with_existing_user(
     context,
 ) -> None:
-    context.register_page.fill_registration_form(
-        context.existing_customer.ui_data()
-    )
+    context.register_page.fill_registration_form(context.existing_customer.ui_data())
 
 
-@when(
-    "submeto o formulário de registro"
-)
+@when("submeto o formulário de registro")
 def step_submit_registration(
     context,
 ) -> None:
     context.register_page.submit()
 
 
-@then(
-    "devo visualizar a mensagem "
-    "de boas-vindas do usuário registrado"
-)
+@then("devo visualizar a mensagem de boas-vindas do usuário registrado")
 def step_assert_registration_success(
     context,
 ) -> None:
-    context.register_page.validate_success(
-        context.current_customer.username
-    )
+    context.register_page.validate_success(context.current_customer.username)
 
 
-@then(
-    "os dados do novo cliente devem estar "
-    "persistidos corretamente"
-)
+@then("os dados do novo cliente devem estar persistidos corretamente")
 def step_assert_customer_persisted(
     context,
 ) -> None:
     customer = context.current_customer
 
-    persisted = (
-        context.api_client.login_customer(
-            customer.username,
-            customer.password,
-        )
+    persisted = context.api_client.login_customer(
+        customer.username,
+        customer.password,
     )
 
     address = persisted.get("address")
 
     if not isinstance(address, dict):
         raise AssertionError(
-            "Persisted customer did not return a valid "
-            f"address payload: {persisted!r}"
+            f"Persisted customer did not return a valid address payload: {persisted!r}"
         )
 
     expected_phone = getattr(
@@ -224,10 +163,7 @@ def step_assert_customer_persisted(
         "ssn": customer.ssn,
     }
 
-    actual = {
-        key: persisted.get(key)
-        for key in expected
-    }
+    actual = {key: persisted.get(key) for key in expected}
 
     if actual != expected:
         raise AssertionError(
@@ -243,10 +179,7 @@ def step_assert_customer_persisted(
         "zipCode": customer.zip_code,
     }
 
-    actual_address = {
-        key: address.get(key)
-        for key in expected_address
-    }
+    actual_address = {key: address.get(key) for key in expected_address}
 
     if actual_address != expected_address:
         raise AssertionError(
@@ -259,8 +192,7 @@ def step_assert_customer_persisted(
 
 
 @then(
-    'o cliente deve possuir uma conta corrente '
-    'inicial com saldo "{expected_balance}"'
+    'o cliente deve possuir uma conta corrente inicial com saldo "{expected_balance}"'
 )
 def step_assert_initial_account(
     context,
@@ -281,11 +213,7 @@ def step_assert_initial_account(
 
     customer_id = int(persisted["id"])
 
-    accounts = (
-        context.api_client.get_customer_accounts(
-            customer_id
-        )
-    )
+    accounts = context.api_client.get_customer_accounts(customer_id)
 
     if len(accounts) != 1:
         raise AssertionError(
@@ -297,13 +225,10 @@ def step_assert_initial_account(
 
     if not _is_checking_account(account):
         raise AssertionError(
-            "The initial customer account is not CHECKING. "
-            f"Actual account: {account!r}"
+            f"The initial customer account is not CHECKING. Actual account: {account!r}"
         )
 
-    actual_balance = Decimal(
-        str(account.get("balance"))
-    )
+    actual_balance = Decimal(str(account.get("balance")))
 
     if actual_balance != Decimal(expected_balance):
         raise AssertionError(
@@ -313,9 +238,7 @@ def step_assert_initial_account(
         )
 
 
-@then(
-    "o telefone persistido deve permanecer vazio"
-)
+@then("o telefone persistido deve permanecer vazio")
 def step_assert_optional_phone_empty(
     context,
 ) -> None:
@@ -340,40 +263,24 @@ def step_assert_optional_phone_empty(
         )
 
 
-@then(
-    "devo visualizar os erros de todos "
-    "os campos obrigatórios do cadastro"
-)
+@then("devo visualizar os erros de todos os campos obrigatórios do cadastro")
 def step_assert_required_registration_errors(
     context,
 ) -> None:
-    context.register_page\
-        .validate_required_field_errors()
+    context.register_page.validate_required_field_errors()
 
 
-@then(
-    'devo visualizar o erro de validação '
-    'de confirmação de senha "{message}"'
-)
+@then('devo visualizar o erro de validação de confirmação de senha "{message}"')
 def step_assert_password_error(
     context,
     message: str,
 ) -> None:
-    context.register_page\
-        .validate_password_mismatch_error(
-            message
-        )
+    context.register_page.validate_password_mismatch_error(message)
 
 
-@then(
-    'devo visualizar a mensagem '
-    'de erro "{message}"'
-)
+@then('devo visualizar a mensagem de erro "{message}"')
 def step_assert_username_error(
     context,
     message: str,
 ) -> None:
-    context.register_page\
-        .validate_username_error(
-            message
-        )
+    context.register_page.validate_username_error(message)

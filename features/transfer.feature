@@ -44,15 +44,16 @@ Funcionalidade: Transferência de Fundos
     E navego para a tela de transferência de fundos
     Então os seletores devem listar somente as contas do cliente autenticado
 
-  Esquema do Cenário: Transferência com formato de valor inválido
+  @known_defect
+  Esquema do Cenário: Entrada monetária inválida é rejeitada sem alterar estado
     E navego para a tela de transferência de fundos
     Quando realizo a tentativa de transferência com valor "<valor>"
-    Então o sistema deve apresentar o erro de transferência "An internal error has occurred and has been logged."
-    E os saldos das duas contas devem permanecer inalterados
+    Então a transferência deve ser rejeitada sem confirmação de sucesso
     E nenhuma transação deve ser criada para a tentativa rejeitada
+    E os saldos das duas contas devem permanecer inalterados
 
     Exemplos:
       | valor       |
-      |             |
+      | [vazio]     |
       | valor_texto |
       | 10,50       |

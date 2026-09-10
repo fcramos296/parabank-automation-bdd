@@ -24,9 +24,7 @@ def parabank_is_ready(base_url: str) -> bool:
         },
     )
 
-    opener = build_opener(
-        ProxyHandler({})
-    )
+    opener = build_opener(ProxyHandler({}))
 
     try:
         with opener.open(
@@ -36,9 +34,7 @@ def parabank_is_ready(base_url: str) -> bool:
             if response.status >= 400:
                 return False
 
-            body = response.read(
-                128 * 1024
-            ).decode(
+            body = response.read(128 * 1024).decode(
                 "utf-8",
                 errors="ignore",
             )
@@ -97,14 +93,9 @@ def recreate_local_parabank(
     startup_timeout_seconds: float,
 ) -> None:
     if not COMPOSE_FILE.exists():
-        raise FileNotFoundError(
-            "compose.yaml não foi encontrado."
-        )
+        raise FileNotFoundError("compose.yaml não foi encontrado.")
 
-    print(
-        "[environment] Recriando ParaBank local "
-        "com banco limpo..."
-    )
+    print("[environment] Recriando ParaBank local com banco limpo...")
 
     _compose_command(
         docker_command,
@@ -122,27 +113,19 @@ def recreate_local_parabank(
         )
     except subprocess.CalledProcessError as exc:
         raise RuntimeError(
-            "Não foi possível iniciar o ParaBank "
-            "via Docker Compose."
+            "Não foi possível iniciar o ParaBank via Docker Compose."
         ) from exc
 
-    deadline = (
-        time.monotonic()
-        + startup_timeout_seconds
-    )
+    deadline = time.monotonic() + startup_timeout_seconds
 
     while time.monotonic() < deadline:
         if parabank_is_ready(base_url):
-            print(
-                "[environment] ParaBank local está pronto."
-            )
+            print("[environment] ParaBank local está pronto.")
             return
 
         time.sleep(2)
 
-    _show_container_logs(
-        docker_command
-    )
+    _show_container_logs(docker_command)
 
     raise RuntimeError(
         "O container ParaBank foi iniciado, mas a "
@@ -154,9 +137,7 @@ def recreate_local_parabank(
 def stop_local_parabank(
     docker_command: Sequence[str],
 ) -> None:
-    print(
-        "[environment] Encerrando ParaBank local..."
-    )
+    print("[environment] Encerrando ParaBank local...")
 
     _compose_command(
         docker_command,
