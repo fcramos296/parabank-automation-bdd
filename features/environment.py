@@ -1,7 +1,10 @@
+import platform
 import time
+from pathlib import Path
 
 import allure
 from playwright.sync_api import (
+    ConsoleMessage,
     Route,
     sync_playwright,
 )
@@ -17,6 +20,15 @@ BLOCKED_RESOURCE_TYPES = {
     "media",
     "font",
 }
+
+ALLURE_RESULTS_DIR = (
+    Path(__file__)
+    .resolve()
+    .parent
+    .parent
+    / "reports"
+    / "allure-results"
+)
 
 
 def _userdata_bool(
@@ -57,6 +69,117 @@ def _handle_resource(
     route.continue_()
 
 
+def _write_allure_environment(
+    context,
+) -> None:
+    ALLURE_RESULTS_DIR.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    execution_mode = (
+        "headless"
+        if context.headless
+        else "headed"
+    )
+
+    properties = [
+        "sut=ParaBank",
+        "environment=Local Docker",
+        f"base_url={settings.BASE_URL}",
+        f"browser={context.browser_name}",
+        f"execution_mode={execution_mode}",
+        f"python={platform.python_version()}",
+        f"os={platform.system()} {platform.release()}",
+        "framework=Playwright + Behave",
+    ]
+
+    (
+        ALLURE_RESULTS_DIR
+        / "environment.properties"
+    ).write_text(
+        "\n".join(properties) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _record_console_message(
+    context,
+    message: ConsoleMessage,
+) -> None:
+    if message.type != "error":
+        return
+
+    context.browser_console_errors.append(
+        message.text
+    )
+
+
+def _apply_allure_metadata(
+    context,
+    scenario,
+) -> None:
+    feature_name = getattr(
+        context.feature,
+        "name",
+        "ParaBank",
+    )
+
+    feature_tags = {
+        str(tag).lower()
+        for tag in getattr(
+            context.feature,
+            "tags",
+            [],
+        )
+    }
+
+    scenario_tags = {
+        str(tag).lower()
+        for tag in getattr(
+            scenario,
+            "tags",
+            [],
+        )
+    }
+
+    tags = feature_tags | scenario_tags
+
+    allure.dynamic.label(
+        "epic",
+        "ParaBank",
+    )
+
+    allure.dynamic.label(
+        "feature",
+        feature_name,
+    )
+
+    allure.dynamic.label(
+        "browser",
+        context.browser_name,
+    )
+
+    allure.dynamic.label(
+        "environment",
+        "local-docker",
+    )
+
+    allure.dynamic.label(
+        "layer",
+        "e2e",
+    )
+
+    allure.dynamic.label(
+        "severity",
+        (
+            "critical"
+            if "smoke" in tags
+            else "normal"
+        ),
+    )
+
+
 def before_all(context) -> None:
     context.headless = _userdata_bool(
         context,
@@ -85,6 +208,10 @@ def before_all(context) -> None:
             "Unsupported browser: "
             f"{context.browser_name}"
         )
+
+    _write_allure_environment(
+        context
+    )
 
     context.playwright = (
         sync_playwright().start()
@@ -118,6 +245,13 @@ def before_scenario(
     context,
     scenario,
 ) -> None:
+    _apply_allure_metadata(
+        context,
+        scenario,
+    )
+
+    context.browser_console_errors = []
+
     context.browser_context = (
         context.browser.new_context(
             viewport={
@@ -138,6 +272,14 @@ def before_scenario(
 
     context.page = (
         context.browser_context.new_page()
+    )
+
+    context.page.on(
+        "console",
+        lambda message: _record_console_message(
+            context,
+            message,
+        ),
     )
 
     context.page.set_default_navigation_timeout(
@@ -162,6 +304,29 @@ def after_step(
         return
 
     try:
+        allure.attach(
+            page.url,
+            name="Current URL",
+            attachment_type=(
+                allure.attachment_type.TEXT
+            ),
+        )
+
+        console_errors = getattr(
+            context,
+            "browser_console_errors",
+            [],
+        )
+
+        if console_errors:
+            allure.attach(
+                "\n".join(console_errors),
+                name="Browser console errors",
+                attachment_type=(
+                    allure.attachment_type.TEXT
+                ),
+            )
+
         screenshot = page.screenshot(
             full_page=True
         )
@@ -177,7 +342,7 @@ def after_step(
     except Exception as exc:
         print(
             "[diagnostic] Unable to attach "
-            f"failure screenshot: {exc}"
+            f"failure evidence: {exc}"
         )
 
 
