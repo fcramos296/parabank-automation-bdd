@@ -34,7 +34,6 @@ class BackendHttpTransport:
         """Execute one HTTP request with the configured timeout."""
 
         http_session = session or self.session
-
         return http_session.request(
             method=method,
             url=url,
@@ -43,3 +42,8 @@ class BackendHttpTransport:
             headers=headers,
             timeout=self.timeout,
         )
+
+    def close(self) -> None:
+        """Release the transport's persistent HTTP session."""
+
+        self.session.close()
