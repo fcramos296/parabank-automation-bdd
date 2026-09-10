@@ -62,6 +62,19 @@ def step_login_with_valid_credentials(
 
 
 @when(
+    "tento novamente com as credenciais "
+    "válidas desse usuário"
+)
+def step_retry_with_valid_credentials(
+    context,
+) -> None:
+    context.login_page.login(
+        context.login_username,
+        context.login_password,
+    )
+
+
+@when(
     'realizo login com esse usuário e senha "{password}"'
 )
 def step_login_existing_user_wrong_password(
@@ -100,6 +113,13 @@ def step_login_with_params(
 
 
 use_step_matcher("parse")
+
+
+@when("recarrego a página autenticada")
+def step_reload_authenticated_page(
+    context,
+) -> None:
+    context.login_page.reload_authenticated_page()
 
 
 @when("solicito o logout")
