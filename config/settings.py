@@ -1,5 +1,3 @@
-from typing import Literal
-
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -7,9 +5,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     LOCAL_BASE_URL: str = "http://localhost:8080/parabank"
     LOCAL_STARTUP_TIMEOUT_SECONDS: float = 180.0
-
-    HEADLESS: bool = True
-    BROWSER: Literal["chromium", "firefox", "webkit"] = "chromium"
 
     PW_TIMEOUT_MS: int = 10_000
     PW_NAVIGATION_TIMEOUT_MS: int = 15_000
