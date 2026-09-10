@@ -26,10 +26,6 @@ class LoginPage(BasePage):
             name="Log In",
         )
 
-        self.error_message = page.locator(
-            "p.error"
-        )
-
         self.authenticated_panel = page.locator(
             "#leftPanel"
         )
@@ -48,20 +44,6 @@ class LoginPage(BasePage):
             )
         )
 
-        self.transfer_amount_input = (
-            page.locator(
-                "#amount"
-            )
-        )
-
-        self.transfer_button = (
-            page.get_by_role(
-                "button",
-                name="Transfer",
-                exact=True,
-            )
-        )
-
     @property
     def visible_error_message(self):
         return self.page.locator(
@@ -69,19 +51,8 @@ class LoginPage(BasePage):
         ).first
 
     def open(self) -> None:
-        """
-        Opens the login page from an explicitly
-        unauthenticated server-side session.
-
-        ParaBank's public instance is shared and has
-        demonstrated inconsistent session state between
-        requests. Visiting logout.htm first invalidates any
-        session that may already exist for this browser
-        context and redirects back to index.htm.
-        """
-
         self.navigate_to(
-            "logout.htm"
+            "index.htm"
         )
 
         expect(
@@ -137,11 +108,6 @@ class LoginPage(BasePage):
     def validate_login_success(
         self,
     ) -> None:
-        """
-        Validates authentication without depending on
-        account-table contents or a specific balance.
-        """
-
         expect(
             self.authenticated_panel
         ).to_contain_text(
@@ -178,33 +144,6 @@ class LoginPage(BasePage):
             self.logout_link
         ).not_to_be_visible()
 
-    def validate_unauthenticated_with_error(
-        self,
-    ) -> None:
-        """
-        Confirms that invalid credentials leave the user
-        unauthenticated and that the application presents
-        a visible error response.
-
-        Hidden template errors are intentionally ignored.
-        """
-
-        expect(
-            self.visible_error_message
-        ).to_be_visible()
-
-        expect(
-            self.visible_error_message
-        ).not_to_have_text("")
-
-        expect(
-            self.username_input
-        ).to_be_visible()
-
-        expect(
-            self.logout_link
-        ).not_to_be_visible()
-
     def validate_logged_out(
         self,
     ) -> None:
@@ -222,37 +161,6 @@ class LoginPage(BasePage):
 
         expect(
             self.account_services_title
-        ).not_to_be_visible()
-
-    def validate_protected_area_blocked(
-        self,
-    ) -> None:
-        """
-        Validates the security property independently from
-        the public environment's current error-message UX.
-
-        After logout, directly requesting transfer.htm must
-        not expose an authenticated session or an actionable
-        transfer form. The public ParaBank may currently show
-        either the expected login-required response or a
-        generic internal error; both still represent denied
-        access to the protected function.
-        """
-
-        expect(
-            self.logout_link
-        ).not_to_be_visible()
-
-        expect(
-            self.account_services_title
-        ).not_to_be_visible()
-
-        expect(
-            self.transfer_amount_input
-        ).not_to_be_visible()
-
-        expect(
-            self.transfer_button
         ).not_to_be_visible()
 
     def validate_authentication_required(
