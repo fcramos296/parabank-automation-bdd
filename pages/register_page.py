@@ -36,9 +36,9 @@ class RegisterPage(BasePage):
         )
 
         self.success_title = page.locator("#rightPanel h1.title")
-        self.success_message = page.locator("#rightPanel").get_by_text(
-            "Your account was created successfully.", exact=True
-        )
+        self.success_message = page.locator("#rightPanel p").filter(
+            has_text="Your account was created successfully."
+        ).first
         self.username_error = page.locator(
             "span[id='customer.username.errors']"
         )
@@ -75,6 +75,9 @@ class RegisterPage(BasePage):
     def validate_success(self, username: str) -> None:
         expect(self.success_title).to_have_text(f"Welcome {username}")
         expect(self.success_message).to_be_visible()
+        expect(self.success_message).to_contain_text(
+            "Your account was created successfully."
+        )
 
     def validate_required_field_errors(self) -> None:
         for field_id, message in self.REQUIRED_FIELD_ERRORS.items():
