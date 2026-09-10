@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import getpass
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -19,12 +21,27 @@ DockerInstallPolicy = Literal[
     "never",
 ]
 
-WINDOWS_DOCKER_BIN = Path(
+WINDOWS_SYSTEM_DOCKER_BIN = Path(
     r"C:\Program Files\Docker\Docker\resources\bin"
 )
-WINDOWS_DOCKER_DESKTOP = Path(
+WINDOWS_SYSTEM_DOCKER_DESKTOP = Path(
     r"C:\Program Files\Docker\Docker\Docker Desktop.exe"
 )
+WINDOWS_USER_DOCKER_ROOT = (
+    Path(os.environ.get("LOCALAPPDATA", ""))
+    / "Programs"
+    / "DockerDesktop"
+)
+WINDOWS_USER_DOCKER_BIN = (
+    WINDOWS_USER_DOCKER_ROOT
+    / "resources"
+    / "bin"
+)
+WINDOWS_USER_DOCKER_DESKTOP = (
+    WINDOWS_USER_DOCKER_ROOT
+    / "Docker Desktop.exe"
+)
+
 MAC_DOCKER_APP = Path(
     "/Applications/Docker.app"
 )
@@ -35,6 +52,11 @@ MAC_DOCKER_BIN = (
     / "bin"
 )
 
+MINIMUM_WSL_VERSION = (
+    2,
+    1,
+    5,
+)
 DOCKER_START_TIMEOUT_SECONDS = 180.0
 DOCKER_POLL_INTERVAL_SECONDS = 2.0
 
@@ -82,7 +104,9 @@ def _command_succeeds(
         return False
 
 
-def _prepend_path(path: Path) -> None:
+def _prepend_path(
+    path: Path,
+) -> None:
     if not path.exists():
         return
 
@@ -106,7 +130,10 @@ def _refresh_docker_path() -> None:
 
     if system == "Windows":
         _prepend_path(
-            WINDOWS_DOCKER_BIN
+            WINDOWS_USER_DOCKER_BIN
+        )
+        _prepend_path(
+            WINDOWS_SYSTEM_DOCKER_BIN
         )
     elif system == "Darwin":
         _prepend_path(
@@ -121,21 +148,20 @@ def _is_interactive() -> bool:
     )
 
 
-def _confirm_install(system_label: str) -> bool:
+def _confirm_install(
+    component_label: str,
+    system_label: str,
+) -> bool:
     print()
     print(
-        "[docker] Docker não foi encontrado."
-    )
-    print(
-        "[docker] O ambiente local do ParaBank "
-        "depende de Docker e Docker Compose."
+        f"[setup] {component_label} não está disponível."
     )
     print()
 
     while True:
         answer = input(
-            f"Deseja instalar o Docker para {system_label} agora? "
-            "[S/n]: "
+            f"Deseja preparar {component_label} "
+            f"para {system_label} agora? [S/n]: "
         ).strip().lower()
 
         if answer in {
@@ -156,12 +182,13 @@ def _confirm_install(system_label: str) -> bool:
             return False
 
         print(
-            "[docker] Responda S ou N."
+            "[setup] Responda S ou N."
         )
 
 
 def _installation_allowed(
     policy: DockerInstallPolicy,
+    component_label: str,
     system_label: str,
 ) -> bool:
     if policy == "always":
@@ -174,7 +201,262 @@ def _installation_allowed(
         return False
 
     return _confirm_install(
-        system_label
+        component_label,
+        system_label,
+    )
+
+
+def _windows_virtualization_enabled() -> bool | None:
+    command = [
+        "powershell.exe",
+        "-NoProfile",
+        "-Command",
+        (
+            "$value = Get-CimInstance Win32_Processor "
+            "| Select-Object -First 1 "
+            "-ExpandProperty VirtualizationFirmwareEnabled; "
+            "if ($null -eq $value) { 'Unknown' } "
+            "elseif ($value) { 'True' } "
+            "else { 'False' }"
+        ),
+    ]
+
+    try:
+        result = _run(
+            command,
+            check=False,
+            capture_output=True,
+            timeout=20,
+        )
+    except (
+        FileNotFoundError,
+        subprocess.TimeoutExpired,
+    ):
+        return None
+
+    value = (
+        result.stdout
+        .strip()
+        .lower()
+    )
+
+    if value == "true":
+        return True
+
+    if value == "false":
+        return False
+
+    return None
+
+
+def _windows_wsl_version() -> tuple[int, int, int] | None:
+    try:
+        result = _run(
+            [
+                "wsl.exe",
+                "--version",
+            ],
+            check=False,
+            capture_output=True,
+            timeout=20,
+        )
+    except (
+        FileNotFoundError,
+        subprocess.TimeoutExpired,
+    ):
+        return None
+
+    text = (
+        (result.stdout or "")
+        + "\n"
+        + (result.stderr or "")
+    )
+
+    first_line = (
+        text.strip()
+        .splitlines()[0]
+        if text.strip()
+        else ""
+    )
+
+    match = re.search(
+        r"(\d+)\.(\d+)\.(\d+)",
+        first_line,
+    )
+
+    if match is None:
+        match = re.search(
+            r"(\d+)\.(\d+)\.(\d+)",
+            text,
+        )
+
+    if match is None:
+        return None
+
+    return tuple(
+        int(part)
+        for part in match.groups()
+    )
+
+
+def _run_windows_elevated(
+    executable: str,
+    arguments: Sequence[str],
+) -> None:
+    escaped_file = executable.replace(
+        "'",
+        "''",
+    )
+
+    escaped_args = ", ".join(
+        "'"
+        + argument.replace(
+            "'",
+            "''",
+        )
+        + "'"
+        for argument in arguments
+    )
+
+    script = (
+        "$process = Start-Process "
+        f"-FilePath '{escaped_file}' "
+        f"-ArgumentList @({escaped_args}) "
+        "-Verb RunAs -Wait -PassThru; "
+        "exit $process.ExitCode"
+    )
+
+    _run(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            script,
+        ]
+    )
+
+
+def _ensure_windows_wsl(
+    policy: DockerInstallPolicy,
+) -> None:
+    virtualization = (
+        _windows_virtualization_enabled()
+    )
+
+    if virtualization is False:
+        raise RuntimeError(
+            "A virtualização de hardware está desabilitada "
+            "no BIOS/UEFI. O Docker Desktop com WSL 2 não "
+            "pode ser iniciado até que Intel VT-x/AMD-V "
+            "seja habilitado no firmware da máquina."
+        )
+
+    current_version = (
+        _windows_wsl_version()
+    )
+
+    if (
+        current_version is not None
+        and current_version
+        >= MINIMUM_WSL_VERSION
+    ):
+        print(
+            "[wsl] WSL "
+            + ".".join(
+                str(part)
+                for part in current_version
+            )
+            + " disponível."
+        )
+        return
+
+    if not _installation_allowed(
+        policy,
+        "WSL 2 / Virtual Machine Platform",
+        "Windows",
+    ):
+        raise RuntimeError(
+            "WSL 2 não atende aos requisitos do Docker "
+            "Desktop. Execute novamente e autorize o "
+            "bootstrap, ou prepare WSL 2 manualmente."
+        )
+
+    if current_version is None:
+        print(
+            "[wsl] Habilitando WSL 2 e Virtual Machine Platform..."
+        )
+
+        _run_windows_elevated(
+            "wsl.exe",
+            [
+                "--install",
+                "--no-distribution",
+            ],
+        )
+    else:
+        print(
+            "[wsl] Atualizando WSL..."
+        )
+
+    update_result = _run(
+        [
+            "wsl.exe",
+            "--update",
+        ],
+        check=False,
+        capture_output=True,
+        timeout=180,
+    )
+
+    if update_result.returncode != 0:
+        print(
+            "[wsl] Atualização normal não concluiu; "
+            "tentando com elevação..."
+        )
+        _run_windows_elevated(
+            "wsl.exe",
+            [
+                "--update",
+            ],
+        )
+
+    _run(
+        [
+            "wsl.exe",
+            "--set-default-version",
+            "2",
+        ],
+        check=False,
+        capture_output=True,
+        timeout=30,
+    )
+
+    updated_version = (
+        _windows_wsl_version()
+    )
+
+    if (
+        updated_version is None
+        or updated_version
+        < MINIMUM_WSL_VERSION
+    ):
+        raise RuntimeError(
+            "WSL/Virtual Machine Platform foram preparados, "
+            "mas o Windows ainda não expôs uma versão WSL "
+            "compatível. Reinicie o Windows e execute "
+            "novamente o mesmo comando. O bootstrap "
+            "continuará automaticamente após o reboot."
+        )
+
+    print(
+        "[wsl] WSL "
+        + ".".join(
+            str(part)
+            for part in updated_version
+        )
+        + " pronto para Docker Desktop."
     )
 
 
@@ -182,9 +464,10 @@ def _install_windows() -> None:
     if shutil.which("winget") is None:
         raise RuntimeError(
             "Docker Desktop não está instalado e o "
-            "WinGet não foi encontrado. Instale o "
-            "Docker Desktop manualmente e execute a "
-            "suíte novamente."
+            "WinGet não foi encontrado. O wrapper "
+            "run_tests.bat consegue instalar Python, "
+            "mas esta instalação do Docker requer "
+            "WinGet ou instalação manual do Desktop."
         )
 
     print(
@@ -206,37 +489,11 @@ def _install_windows() -> None:
     _refresh_docker_path()
 
 
-def _install_macos() -> None:
-    if shutil.which("brew") is None:
-        raise RuntimeError(
-            "Docker Desktop não está instalado e o "
-            "Homebrew não foi encontrado. Instale o "
-            "Docker Desktop para macOS e execute a "
-            "suíte novamente."
-        )
-
-    print(
-        "[docker] Instalando Docker Desktop via Homebrew..."
-    )
-
-    _run(
-        [
-            "brew",
-            "install",
-            "--cask",
-            "docker",
-        ]
-    )
-
-    _refresh_docker_path()
-
-
-def _install_linux() -> None:
+def _install_macos_direct() -> None:
     if shutil.which("curl") is None:
         raise RuntimeError(
-            "curl não foi encontrado. Instale curl "
-            "para que o bootstrap oficial do Docker "
-            "possa ser executado."
+            "curl não foi encontrado no macOS. "
+            "Não foi possível baixar Docker Desktop."
         )
 
     if (
@@ -244,10 +501,215 @@ def _install_linux() -> None:
         and shutil.which("sudo") is None
     ):
         raise RuntimeError(
-            "A instalação do Docker Engine exige "
-            "privilégios administrativos. sudo não "
-            "foi encontrado."
+            "A instalação do Docker Desktop no macOS "
+            "exige privilégios administrativos."
         )
+
+    machine = (
+        platform.machine()
+        .lower()
+    )
+
+    architecture = (
+        "arm64"
+        if machine in {
+            "arm64",
+            "aarch64",
+        }
+        else "amd64"
+    )
+
+    download_url = (
+        "https://desktop.docker.com/mac/main/"
+        f"{architecture}/Docker.dmg"
+    )
+
+    prefix: list[str] = []
+
+    if os.geteuid() != 0:
+        prefix = ["sudo"]
+
+    with tempfile.TemporaryDirectory(
+        prefix="parabank-docker-mac-"
+    ) as directory:
+        dmg_path = (
+            Path(directory)
+            / "Docker.dmg"
+        )
+
+        print(
+            "[docker] Baixando Docker Desktop oficial para macOS..."
+        )
+
+        _run(
+            [
+                "curl",
+                "-fL",
+                download_url,
+                "-o",
+                dmg_path,
+            ]
+        )
+
+        _run(
+            [
+                *prefix,
+                "hdiutil",
+                "attach",
+                dmg_path,
+                "-nobrowse",
+            ]
+        )
+
+        try:
+            _run(
+                [
+                    *prefix,
+                    (
+                        "/Volumes/Docker/Docker.app/"
+                        "Contents/MacOS/install"
+                    ),
+                    "--user",
+                    getpass.getuser(),
+                ]
+            )
+        finally:
+            _run(
+                [
+                    *prefix,
+                    "hdiutil",
+                    "detach",
+                    "/Volumes/Docker",
+                ],
+                check=False,
+            )
+
+    _refresh_docker_path()
+
+
+def _install_macos() -> None:
+    if shutil.which("brew") is not None:
+        print(
+            "[docker] Instalando Docker Desktop via Homebrew..."
+        )
+
+        _run(
+            [
+                "brew",
+                "install",
+                "--cask",
+                "docker",
+            ]
+        )
+
+        _refresh_docker_path()
+        return
+
+    _install_macos_direct()
+
+
+def _linux_admin_prefix() -> list[str]:
+    if os.geteuid() == 0:
+        return []
+
+    if shutil.which("sudo") is None:
+        raise RuntimeError(
+            "A operação exige privilégios administrativos "
+            "e sudo não foi encontrado."
+        )
+
+    return ["sudo"]
+
+
+def _ensure_linux_curl() -> None:
+    if shutil.which("curl") is not None:
+        return
+
+    prefix = _linux_admin_prefix()
+
+    print(
+        "[docker] curl não encontrado; instalando..."
+    )
+
+    if shutil.which("apt-get"):
+        _run(
+            [
+                *prefix,
+                "apt-get",
+                "update",
+            ]
+        )
+        _run(
+            [
+                *prefix,
+                "apt-get",
+                "install",
+                "-y",
+                "curl",
+                "ca-certificates",
+            ]
+        )
+    elif shutil.which("dnf"):
+        _run(
+            [
+                *prefix,
+                "dnf",
+                "install",
+                "-y",
+                "curl",
+                "ca-certificates",
+            ]
+        )
+    elif shutil.which("yum"):
+        _run(
+            [
+                *prefix,
+                "yum",
+                "install",
+                "-y",
+                "curl",
+                "ca-certificates",
+            ]
+        )
+    elif shutil.which("pacman"):
+        _run(
+            [
+                *prefix,
+                "pacman",
+                "-S",
+                "--noconfirm",
+                "curl",
+                "ca-certificates",
+            ]
+        )
+    elif shutil.which("zypper"):
+        _run(
+            [
+                *prefix,
+                "zypper",
+                "--non-interactive",
+                "install",
+                "curl",
+                "ca-certificates",
+            ]
+        )
+    else:
+        raise RuntimeError(
+            "curl não está disponível e nenhum gerenciador "
+            "de pacotes Linux suportado foi encontrado."
+        )
+
+    if shutil.which("curl") is None:
+        raise RuntimeError(
+            "curl foi solicitado ao gerenciador de pacotes, "
+            "mas continua indisponível."
+        )
+
+
+def _install_linux() -> None:
+    prefix = _linux_admin_prefix()
+
+    _ensure_linux_curl()
 
     print(
         "[docker] Instalando Docker Engine pelo "
@@ -272,18 +734,13 @@ def _install_linux() -> None:
             ]
         )
 
-        command: list[str | Path] = [
-            "sh",
-            installer,
-        ]
-
-        if os.geteuid() != 0:
-            command.insert(
-                0,
-                "sudo",
-            )
-
-        _run(command)
+        _run(
+            [
+                *prefix,
+                "sh",
+                installer,
+            ]
+        )
 
 
 def _install_docker(
@@ -307,6 +764,19 @@ def _install_docker(
     )
 
 
+def _windows_desktop_executable() -> Path | None:
+    candidates = (
+        WINDOWS_USER_DOCKER_DESKTOP,
+        WINDOWS_SYSTEM_DOCKER_DESKTOP,
+    )
+
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+
+    return None
+
+
 def _start_windows_desktop() -> None:
     print(
         "[docker] Iniciando Docker Desktop..."
@@ -324,9 +794,13 @@ def _start_windows_desktop() -> None:
     ):
         return
 
-    if WINDOWS_DOCKER_DESKTOP.exists():
+    executable = (
+        _windows_desktop_executable()
+    )
+
+    if executable is not None:
         subprocess.Popen(
-            [str(WINDOWS_DOCKER_DESKTOP)],
+            [str(executable)],
             cwd=PROJECT_ROOT,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -376,10 +850,7 @@ def _start_linux_daemon() -> None:
         "[docker] Iniciando Docker Engine..."
     )
 
-    prefix: list[str] = []
-
-    if os.geteuid() != 0:
-        prefix = ["sudo"]
+    prefix = _linux_admin_prefix()
 
     if shutil.which("systemctl"):
         _run(
@@ -521,10 +992,7 @@ def _ensure_compose(
             "reinstale o Docker Desktop."
         )
 
-    prefix: list[str] = []
-
-    if os.geteuid() != 0:
-        prefix = ["sudo"]
+    prefix = _linux_admin_prefix()
 
     print(
         "[docker] Instalando Docker Compose plugin..."
@@ -593,13 +1061,16 @@ def ensure_docker(
     install_policy: DockerInstallPolicy = "ask",
 ) -> list[str]:
     """
-    Ensures that a usable Docker runtime and Compose plugin
-    are available for this test execution.
+    Ensures that the host prerequisites, Docker runtime and
+    Compose plugin are available for this test execution.
 
-    Returns the command prefix used by the environment
-    lifecycle. It is normally ["docker"]. On Linux systems
-    where the current user cannot access the daemon directly,
-    it may be ["sudo", "docker"].
+    Windows uses Docker Desktop + WSL 2.
+    macOS uses Docker Desktop.
+    Linux uses Docker Engine directly.
+
+    Returns ["docker"] in the common case and may return
+    ["sudo", "docker"] on Linux when daemon access still
+    requires elevated privileges.
     """
 
     system = platform.system()
@@ -618,85 +1089,115 @@ def ensure_docker(
 
     _refresh_docker_path()
 
-    docker_command = _resolve_running_command(
+    docker_command = (
+        _resolve_running_command(
+            system
+        )
+    )
+
+    if docker_command is not None:
+        _ensure_compose(
+            docker_command,
+            system,
+        )
+        return _print_versions(
+            docker_command
+        )
+
+    if system == "Windows":
+        _ensure_windows_wsl(
+            install_policy
+        )
+
+    docker_installed = (
+        shutil.which("docker")
+        is not None
+    )
+
+    if not docker_installed:
+        if not _installation_allowed(
+            install_policy,
+            "Docker",
+            system_labels[system],
+        ):
+            raise RuntimeError(
+                "Docker não está instalado. Execute "
+                "novamente e aceite o bootstrap, ou "
+                "use --install-docker para autorizar "
+                "a instalação automaticamente."
+            )
+
+        _install_docker(
+            system
+        )
+        _refresh_docker_path()
+
+        if shutil.which("docker") is None:
+            raise RuntimeError(
+                "A instalação do Docker terminou, mas "
+                "o executável ainda não está acessível. "
+                "Feche e abra o terminal e execute a "
+                "suíte novamente."
+            )
+
+    _start_runtime(
         system
     )
 
-    if docker_command is None:
-        docker_installed = (
-            shutil.which("docker")
-            is not None
-        )
-
-        if not docker_installed:
-            if not _installation_allowed(
-                install_policy,
-                system_labels[system],
-            ):
-                raise RuntimeError(
-                    "Docker não está instalado. Execute "
-                    "novamente e aceite o bootstrap, ou "
-                    "use --install-docker para autorizar "
-                    "a instalação automaticamente."
-                )
-
-            _install_docker(system)
-            _refresh_docker_path()
-
-            if shutil.which("docker") is None:
-                raise RuntimeError(
-                    "A instalação do Docker terminou, mas "
-                    "o executável ainda não está acessível. "
-                    "Feche e abra o terminal e execute a "
-                    "suíte novamente."
-                )
-
-        _start_runtime(system)
-
-        if system == "Linux":
-            if not _wait_for_docker(
-                ["docker"],
-                timeout_seconds=30,
-            ):
-                docker_command = _resolve_linux_command()
-            else:
-                docker_command = ["docker"]
-        else:
-            if _wait_for_docker(
-                ["docker"]
-            ):
-                docker_command = ["docker"]
-
-        if docker_command is None:
-            if system == "Windows":
-                detail = (
-                    "O Windows pode exigir WSL 2, "
-                    "virtualização habilitada ou uma "
-                    "reinicialização após a instalação."
-                )
-            elif system == "Darwin":
-                detail = (
-                    "Abra o Docker Desktop uma vez para "
-                    "concluir qualquer configuração ou "
-                    "aceite de licença pendente."
-                )
-            else:
-                detail = (
-                    "Verifique o serviço docker e as "
-                    "permissões do usuário."
-                )
-
-            raise RuntimeError(
-                "Docker foi encontrado/instalado, mas o "
-                "daemon não ficou disponível. "
-                + detail
+    if system == "Linux":
+        if not _wait_for_docker(
+            ["docker"],
+            timeout_seconds=30,
+        ):
+            docker_command = (
+                _resolve_linux_command()
             )
+        else:
+            docker_command = ["docker"]
+    else:
+        if _wait_for_docker(
+            ["docker"]
+        ):
+            docker_command = ["docker"]
+
+    if docker_command is None:
+        if system == "Windows":
+            detail = (
+                "Verifique WSL 2, virtualização de "
+                "hardware e se existe reinicialização "
+                "pendente após habilitar recursos do Windows."
+            )
+        elif system == "Darwin":
+            detail = (
+                "Abra o Docker Desktop uma vez para "
+                "concluir qualquer configuração ou "
+                "aceite de licença pendente."
+            )
+        else:
+            detail = (
+                "Verifique o serviço docker e as "
+                "permissões do usuário."
+            )
+
+        raise RuntimeError(
+            "Docker foi encontrado/instalado, mas o "
+            "daemon não ficou disponível. "
+            + detail
+        )
 
     _ensure_compose(
         docker_command,
         system,
     )
 
+    return _print_versions(
+        docker_command
+    )
+
+
+def _print_versions(
+    docker_command: Sequence[str],
+) -> list[str]:
     version = _run(
         [
             *docker_command,
