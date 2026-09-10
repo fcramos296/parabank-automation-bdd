@@ -14,6 +14,29 @@ from utils.test_data import (
 )
 
 
+def _is_checking_account(
+    account: dict,
+) -> bool:
+    raw_type = account.get("type")
+
+    if isinstance(raw_type, str):
+        return (
+            raw_type.strip().upper()
+            == AccountType.CHECKING.name
+        )
+
+    try:
+        return (
+            int(raw_type)
+            == int(AccountType.CHECKING)
+        )
+    except (
+        TypeError,
+        ValueError,
+    ):
+        return False
+
+
 @given("que estou na página de registro")
 def step_open_registration(
     context,
@@ -272,7 +295,7 @@ def step_assert_initial_account(
 
     account = accounts[0]
 
-    if int(account.get("type", -1)) != int(AccountType.CHECKING):
+    if not _is_checking_account(account):
         raise AssertionError(
             "The initial customer account is not CHECKING. "
             f"Actual account: {account!r}"
