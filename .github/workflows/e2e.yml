@@ -107,9 +107,23 @@ jobs:
         shell: bash
         run: python -m ruff check .
 
-      - name: Validate Ruff formatting
+      - name: Format Python working tree with Ruff
         shell: bash
-        run: python -m ruff format --check .
+        run: python -m ruff format .
+
+      - name: Upload Ruff-formatted source snapshot
+        uses: actions/upload-artifact@v7
+        with:
+          name: ruff-formatted-source-${{ github.run_number }}
+          path: |
+            config
+            features
+            pages
+            scripts
+            services
+            utils
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Validate BDD step bindings
         shell: bash
