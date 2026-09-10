@@ -48,6 +48,20 @@ class LoginPage(BasePage):
             )
         )
 
+        self.transfer_amount_input = (
+            page.locator(
+                "#amount"
+            )
+        )
+
+        self.transfer_button = (
+            page.get_by_role(
+                "button",
+                name="Transfer",
+                exact=True,
+            )
+        )
+
     @property
     def visible_error_message(self):
         return self.page.locator(
@@ -208,6 +222,37 @@ class LoginPage(BasePage):
 
         expect(
             self.account_services_title
+        ).not_to_be_visible()
+
+    def validate_protected_area_blocked(
+        self,
+    ) -> None:
+        """
+        Validates the security property independently from
+        the public environment's current error-message UX.
+
+        After logout, directly requesting transfer.htm must
+        not expose an authenticated session or an actionable
+        transfer form. The public ParaBank may currently show
+        either the expected login-required response or a
+        generic internal error; both still represent denied
+        access to the protected function.
+        """
+
+        expect(
+            self.logout_link
+        ).not_to_be_visible()
+
+        expect(
+            self.account_services_title
+        ).not_to_be_visible()
+
+        expect(
+            self.transfer_amount_input
+        ).not_to_be_visible()
+
+        expect(
+            self.transfer_button
         ).not_to_be_visible()
 
     def validate_authentication_required(
