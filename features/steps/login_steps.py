@@ -69,6 +69,10 @@ def step_login_with_params(
                 "invalid"
             )
         )
+    elif username == "existente":
+        username_to_use = (
+            settings.PUBLIC_EXISTING_USERNAME
+        )
     else:
         username_to_use = username
 
@@ -79,6 +83,25 @@ def step_login_with_params(
 
 
 use_step_matcher("parse")
+
+
+@when("solicito o logout")
+def step_logout(
+    context,
+) -> None:
+    context.login_page.logout()
+
+
+@when(
+    "tento acessar diretamente "
+    "a transferência de fundos"
+)
+def step_open_protected_transfer(
+    context,
+) -> None:
+    context.login_page.open_protected_area(
+        "transfer.htm"
+    )
 
 
 @then(
@@ -110,5 +133,28 @@ def step_validate_login_failure(
     error_message: str,
 ) -> None:
     context.login_page.validate_login_failure(
+        error_message
+    )
+
+
+@then(
+    "devo retornar à tela de login "
+    "sem sessão autenticada"
+)
+def step_validate_logout(
+    context,
+) -> None:
+    context.login_page.validate_logged_out()
+
+
+@then(
+    'devo ser solicitado a autenticar novamente '
+    'com a mensagem "{error_message}"'
+)
+def step_validate_protected_area(
+    context,
+    error_message: str,
+) -> None:
+    context.login_page.validate_authentication_required(
         error_message
     )
