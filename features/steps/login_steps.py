@@ -5,9 +5,11 @@ from behave import (
     when,
 )
 
-from config.settings import settings
 from pages.login_page import LoginPage
-from utils.test_data import unique_username
+from utils.test_data import (
+    build_customer,
+    unique_username,
+)
 
 
 @given("que estou na tela de login")
@@ -22,18 +24,27 @@ def step_open_login(
 
 
 @given(
-    "que possuo credenciais válidas de um "
-    "usuário existente no ambiente público"
+    "que existe um usuário exclusivo "
+    "cadastrado para autenticação"
 )
-def step_use_existing_public_user(
+def step_seed_exclusive_login_user(
     context,
 ) -> None:
+    context.login_customer = (
+        build_customer("login")
+    )
+
+    context.api_client.register_user(
+        context.login_customer
+        .registration_payload()
+    )
+
     context.login_username = (
-        settings.PUBLIC_EXISTING_USERNAME
+        context.login_customer.username
     )
 
     context.login_password = (
-        settings.public_existing_password
+        context.login_customer.password
     )
 
 
@@ -41,12 +52,25 @@ def step_use_existing_public_user(
     "informo as credenciais válidas "
     "desse usuário"
 )
-def step_login_with_existing_credentials(
+def step_login_with_valid_credentials(
     context,
 ) -> None:
     context.login_page.login(
         context.login_username,
         context.login_password,
+    )
+
+
+@when(
+    'realizo login com esse usuário e senha "{password}"'
+)
+def step_login_existing_user_wrong_password(
+    context,
+    password: str,
+) -> None:
+    context.login_page.login(
+        context.login_username,
+        password,
     )
 
 
@@ -63,18 +87,11 @@ def step_login_with_params(
     username: str,
     password: str,
 ) -> None:
-    if username == "inexistente":
-        username_to_use = (
-            unique_username(
-                "invalid"
-            )
-        )
-    elif username == "existente":
-        username_to_use = (
-            settings.PUBLIC_EXISTING_USERNAME
-        )
-    else:
-        username_to_use = username
+    username_to_use = (
+        unique_username("invalid")
+        if username == "inexistente"
+        else username
+    )
 
     context.login_page.login(
         username_to_use,
@@ -115,16 +132,6 @@ def step_validate_login_success(
 
 
 @then(
-    "a tentativa de autenticação deve ser "
-    "rejeitada com uma mensagem de erro"
-)
-def step_validate_invalid_login(
-    context,
-) -> None:
-    context.login_page.validate_unauthenticated_with_error()
-
-
-@then(
     'devo visualizar a mensagem de erro '
     'de autenticação "{error_message}"'
 )
@@ -145,16 +152,6 @@ def step_validate_logout(
     context,
 ) -> None:
     context.login_page.validate_logged_out()
-
-
-@then(
-    "a área protegida deve permanecer "
-    "inacessível sem sessão autenticada"
-)
-def step_validate_protected_area_blocked(
-    context,
-) -> None:
-    context.login_page.validate_protected_area_blocked()
 
 
 @then(
