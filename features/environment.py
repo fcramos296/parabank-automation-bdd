@@ -125,6 +125,14 @@ def before_all(context) -> None:
         settings.HEADLESS,
     )
 
+    context.include_known_issues = (
+        _userdata_bool(
+            context,
+            "include_known_issues",
+            False,
+        )
+    )
+
     context.browser_name = (
         context.config.userdata.get(
             "browser",
@@ -204,6 +212,26 @@ def before_scenario(
     context,
     scenario,
 ) -> None:
+    scenario_tags = {
+        str(tag)
+        for tag in getattr(
+            scenario,
+            "effective_tags",
+            scenario.tags,
+        )
+    }
+
+    if (
+        "known_issue" in scenario_tags
+        and not context.include_known_issues
+    ):
+        scenario.skip(
+            "Known issue in the public ParaBank "
+            "environment. Use Behave userdata "
+            "include_known_issues=true to reproduce it."
+        )
+        return
+
     use_proxy = (
         settings.BROWSER_TRANSPORT
         == "proxy"
@@ -288,6 +316,7 @@ def after_scenario(
 
     if browser_context:
         browser_context.close()
+        context.browser_context = None
 
     delay = (
         settings.UI_SCENARIO_DELAY_SECONDS
