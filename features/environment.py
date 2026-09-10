@@ -1,4 +1,3 @@
-import secrets
 import time
 
 import allure
@@ -40,69 +39,9 @@ def _userdata_bool(
     }
 
 
-def _build_browser_proxy() -> dict | None:
-    """
-    Optional browser proxy.
-
-    Kept available for environments/plans where
-    Scrape.do Proxy Mode has enough concurrency,
-    but disabled by default for this project.
-    """
-
-    if (
-        settings.BROWSER_TRANSPORT
-        != "proxy"
-    ):
-        return None
-
-    token = settings.scrape_do_token
-
-    if not token:
-        raise RuntimeError(
-            "BROWSER_TRANSPORT=proxy "
-            "requires SCRAPE_DO_TOKEN."
-        )
-
-    session_id = secrets.randbelow(
-        1_000_001
-    )
-
-    params = (
-        settings
-        .SCRAPE_DO_BROWSER_PROXY_PARAMS
-        .strip()
-        .strip("&")
-    )
-
-    if params:
-        password = (
-            f"{params}"
-            f"&sessionId={session_id}"
-        )
-    else:
-        password = (
-            f"sessionId={session_id}"
-        )
-
-    return {
-        "server": settings.SCRAPE_DO_PROXY_URL,
-        "username": token,
-        "password": password,
-    }
-
-
 def _handle_resource(
     route: Route,
 ) -> None:
-    """
-    Avoid downloading resources that do not
-    contribute to functional assertions.
-
-    Scripts and stylesheets remain enabled because
-    they can affect application behavior and
-    Playwright visibility calculations.
-    """
-
     resource_type = (
         route.request.resource_type
     )
@@ -123,14 +62,6 @@ def before_all(context) -> None:
         context,
         "headless",
         settings.HEADLESS,
-    )
-
-    context.include_known_issues = (
-        _userdata_bool(
-            context,
-            "include_known_issues",
-            False,
-        )
     )
 
     context.browser_name = (
@@ -164,43 +95,18 @@ def before_all(context) -> None:
         context.browser_name,
     )
 
-    launch_options = {
-        "headless": context.headless,
-    }
-
-    browser_proxy = (
-        _build_browser_proxy()
+    print(
+        "[browser] Playwright will access "
+        f"ParaBank directly at {settings.BASE_URL}."
     )
 
-    if browser_proxy:
-        launch_options["proxy"] = (
-            browser_proxy
-        )
-
+    if settings.BLOCK_NONESSENTIAL_RESOURCES:
         print(
-            "[browser] Playwright traffic "
-            "will use Scrape.do Proxy Mode."
+            "[browser] Non-essential resources are blocked."
         )
 
-    else:
-        print(
-            "[browser] Playwright will access "
-            "ParaBank directly."
-        )
-
-        if (
-            settings
-            .BLOCK_NONESSENTIAL_RESOURCES
-        ):
-            print(
-                "[browser] Non-essential "
-                "resources are blocked."
-            )
-
-    context.browser = (
-        browser_type.launch(
-            **launch_options
-        )
+    context.browser = browser_type.launch(
+        headless=context.headless,
     )
 
     context.api_client = (
@@ -212,38 +118,12 @@ def before_scenario(
     context,
     scenario,
 ) -> None:
-    scenario_tags = {
-        str(tag)
-        for tag in getattr(
-            scenario,
-            "effective_tags",
-            scenario.tags,
-        )
-    }
-
-    if (
-        "known_issue" in scenario_tags
-        and not context.include_known_issues
-    ):
-        scenario.skip(
-            "Known issue in the public ParaBank "
-            "environment. Use Behave userdata "
-            "include_known_issues=true to reproduce it."
-        )
-        return
-
-    use_proxy = (
-        settings.BROWSER_TRANSPORT
-        == "proxy"
-    )
-
     context.browser_context = (
         context.browser.new_context(
             viewport={
                 "width": 1280,
                 "height": 720,
             },
-            ignore_https_errors=use_proxy,
         )
     )
 
@@ -269,10 +149,7 @@ def after_step(
     context,
     step,
 ) -> None:
-    if (
-        step.status.name
-        != "failed"
-    ):
+    if step.status.name != "failed":
         return
 
     page = getattr(
@@ -318,9 +195,7 @@ def after_scenario(
         browser_context.close()
         context.browser_context = None
 
-    delay = (
-        settings.UI_SCENARIO_DELAY_SECONDS
-    )
+    delay = settings.UI_SCENARIO_DELAY_SECONDS
 
     if delay > 0:
         time.sleep(delay)
