@@ -36,6 +36,28 @@ def step_fill_valid_registration(
 
 
 @when(
+    "preencho o formulário de cadastro "
+    "com dados válidos sem informar telefone"
+)
+def step_fill_registration_without_phone(
+    context,
+) -> None:
+    context.current_customer = (
+        build_customer("nophone")
+    )
+
+    data = (
+        context.current_customer.ui_data()
+    )
+
+    data["phone"] = ""
+
+    context.register_page.fill_registration_form(
+        data
+    )
+
+
+@when(
     'preencho o formulário informando '
     'a senha "{password}" '
     'e confirmação "{confirm}"'
@@ -107,6 +129,17 @@ def step_assert_registration_success(
     context.register_page.validate_success(
         context.current_customer.username
     )
+
+
+@then(
+    "devo visualizar os erros de todos "
+    "os campos obrigatórios do cadastro"
+)
+def step_assert_required_registration_errors(
+    context,
+) -> None:
+    context.register_page\
+        .validate_required_field_errors()
 
 
 @then(
