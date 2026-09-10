@@ -189,6 +189,7 @@ Os exemplos de entrada monetária inválida são marcados com `@known_defect` po
 │   ├── http_transport.py
 │   └── parabank_api_client.py
 ├── utils/
+│   ├── gherkin_values.py
 │   └── test_data.py
 ├── behave.ini
 ├── compose.yaml
@@ -224,7 +225,7 @@ docker compose down --volumes --remove-orphans
                 ↓
 docker compose up -d
                 ↓
-healthcheck + readiness HTTP
+readiness HTTP da aplicação
                 ↓
 executa os testes
                 ↓
@@ -232,6 +233,8 @@ gera evidências
                 ↓
 docker compose down --volumes --remove-orphans
 ```
+
+O runner só libera a suíte depois que `/parabank/index.htm` responde como aplicação ParaBank, evitando confundir porta aberta com SUT pronto.
 
 Benefícios:
 
