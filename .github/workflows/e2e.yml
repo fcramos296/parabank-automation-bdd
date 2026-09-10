@@ -37,7 +37,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   PYTHONUNBUFFERED: "1"
@@ -58,6 +58,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref }}
 
       - name: Setup Python
         uses: actions/setup-python@v7
@@ -111,19 +113,20 @@ jobs:
         shell: bash
         run: python -m ruff format .
 
-      - name: Upload Ruff-formatted source snapshot
-        uses: actions/upload-artifact@v7
-        with:
-          name: ruff-formatted-source-${{ github.run_number }}
-          path: |
-            config
-            features
-            pages
-            scripts
-            services
-            utils
-          if-no-files-found: error
-          retention-days: 1
+      - name: Commit Ruff formatting
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "Python sources are already formatted."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- '*.py'
+          git commit -m "Apply Ruff formatting"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
 
       - name: Validate BDD step bindings
         shell: bash
