@@ -1,4 +1,5 @@
 # language: pt
+
 @ui @registration
 Funcionalidade: Registro de Usuário
   Como um novo cliente do ParaBank
@@ -13,6 +14,15 @@ Funcionalidade: Registro de Usuário
     Quando preencho o formulário de cadastro com dados dinâmicos válidos
     E submeto o formulário de registro
     Então devo visualizar a mensagem de boas-vindas do usuário registrado
+
+  Cenário: Cadastro com sucesso sem informar o telefone opcional
+    Quando preencho o formulário de cadastro com dados válidos sem informar telefone
+    E submeto o formulário de registro
+    Então devo visualizar a mensagem de boas-vindas do usuário registrado
+
+  Cenário: Tentativa de cadastro sem preencher os campos obrigatórios
+    Quando submeto o formulário de registro
+    Então devo visualizar os erros de todos os campos obrigatórios do cadastro
 
   Cenário: Tentativa de cadastro com confirmação de senha divergente
     Quando preencho o formulário informando a senha "Secr3t!2026" e confirmação "Mismatch!2026"
