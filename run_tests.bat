@@ -386,9 +386,18 @@ echo.
 set /p "BROWSER_CHOICE=Escolha [1-3] (padrao: 1): "
 if "!BROWSER_CHOICE!"=="" set "BROWSER_CHOICE=1"
 
-if "!BROWSER_CHOICE!"=="1" set "BROWSER=chromium" & exit /b 0
-if "!BROWSER_CHOICE!"=="2" set "BROWSER=firefox" & exit /b 0
-if "!BROWSER_CHOICE!"=="3" set "BROWSER=webkit" & exit /b 0
+if "!BROWSER_CHOICE!"=="1" (
+    set "BROWSER=chromium"
+    exit /b 0
+)
+if "!BROWSER_CHOICE!"=="2" (
+    set "BROWSER=firefox"
+    exit /b 0
+)
+if "!BROWSER_CHOICE!"=="3" (
+    set "BROWSER=webkit"
+    exit /b 0
+)
 
 echo.
 echo [AVISO] Opcao invalida.
