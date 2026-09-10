@@ -139,7 +139,7 @@ jobs:
       - name: Install Allure Report
         shell: bash
         run: |
-          npm install -g allure@3.17.0
+          npm install -g allure
           allure --version
 
       - name: Run regression
@@ -186,7 +186,7 @@ jobs:
           # Mantém o job vivo para publicar as evidências mesmo em falha.
           exit 0
 
-      - name: Generate branded Allure Report
+      - name: Generate Allure Report
         id: allure
         if: always()
         shell: bash
@@ -200,28 +200,9 @@ jobs:
 
           rm -rf reports/allure-report
 
-          set +e
           allure generate \
             reports/allure-results \
-            --config ./allurerc.yml \
             --output reports/allure-report
-          allure_exit_code=$?
-          set -e
-
-          if [[ "$allure_exit_code" != "0" ]]; then
-            echo "generated=false" >> "$GITHUB_OUTPUT"
-            echo "::error::Allure report generation failed with exit code ${allure_exit_code}."
-
-            latest_log="$(ls -1t "$HOME"/.allure/logs/*.log 2>/dev/null | head -n 1 || true)"
-
-            if [[ -n "$latest_log" ]]; then
-              echo "::group::Allure diagnostic log"
-              cat "$latest_log"
-              echo "::endgroup::"
-            fi
-
-            exit "$allure_exit_code"
-          fi
 
           test -f reports/allure-report/index.html
           echo "generated=true" >> "$GITHUB_OUTPUT"
@@ -235,13 +216,13 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      - name: Upload branded Allure HTML Report
+      - name: Upload Allure HTML Report
         if: >
           always() &&
           steps.allure.outputs.generated == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: topaz-allure-report-${{ github.run_number }}-${{ steps.execution.outputs.browser }}
+          name: allure-report-${{ github.run_number }}-${{ steps.execution.outputs.browser }}
           path: reports/allure-report
           if-no-files-found: error
           retention-days: 14

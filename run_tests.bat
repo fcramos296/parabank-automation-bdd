@@ -4,22 +4,20 @@ setlocal EnableExtensions EnableDelayedExpansion
 chcp 65001 >nul
 cd /d "%~dp0"
 
-title ParaBank Automation BDD - Topaz
+title ParaBank Automation - Interactive Runner
 
-set "ALLURE_VERSION=3.17.0"
-set "ALLURE_CONFIG=allurerc.yml"
 set "ALLURE_RESULTS=reports\allure-results"
 set "ALLURE_REPORT=reports\allure-report"
 
 set "TEST_EXIT_CODE=0"
-set "PYTHON_CMD="
 set "SCOPE_ARG="
 set "TAGS_ARG="
 set "HEADED_ARG="
 set "BROWSER=chromium"
 set "GENERATE_REPORT=1"
-set "ALLURE_READY=0"
-set "ALLURE_SCOPE=full"
+set "ALLURE_AVAILABLE=0"
+set "ALLURE_MODE="
+set "PYTHON_CMD="
 
 cls
 call :HEADER
@@ -31,14 +29,13 @@ echo Em uma maquina nova ele pode preparar automaticamente:
 echo.
 echo   - Python 3.10+;
 echo   - WSL 2 e Virtual Machine Platform no Windows;
-echo   - Docker Desktop e Docker Compose;
+echo   - Docker Desktop / Docker Engine;
+echo   - Docker Compose;
 echo   - ambiente virtual e dependencias Python;
 echo   - browsers do Playwright;
 echo   - ParaBank e banco de dados local.
 echo.
-echo O relatorio utiliza Allure 3 Awesome com identidade visual Topaz.
-echo.
-echo Alteracoes de sistema podem solicitar confirmacao,
+echo Alteracoes de sistema sempre podem solicitar confirmacao,
 echo UAC ou privilegios administrativos.
 echo.
 
@@ -58,10 +55,12 @@ if not "%~1"=="" (
     echo [INFO] Argumentos detectados. Executando scripts\run.py diretamente.
     echo.
     call !PYTHON_CMD! scripts\run.py %*
-    exit /b !ERRORLEVEL!
+    set "TEST_EXIT_CODE=!ERRORLEVEL!"
+    exit /b !TEST_EXIT_CODE!
 )
 
 :MAIN_MENU
+
 cls
 call :HEADER
 
@@ -83,7 +82,6 @@ echo   Navegador...: !BROWSER!
 echo   Modo........: !MODE_DESCRIPTION!
 echo   Relatorio...: !REPORT_DESCRIPTION!
 echo.
-
 echo O runner ira preparar Docker/ParaBank, Python/Playwright
 echo e executar os cenarios Behave selecionados.
 echo.
@@ -92,18 +90,14 @@ choice /C SN /N /M "Deseja iniciar a execucao? [S/N]: "
 if errorlevel 2 goto END_USER
 
 if "!GENERATE_REPORT!"=="1" (
-    call :ENSURE_ALLURE3
-    if errorlevel 1 (
-        echo.
-        echo [AVISO] O relatorio HTML nao sera gerado nesta execucao.
-        set "GENERATE_REPORT=0"
-    )
+    call :ENSURE_ALLURE
 )
 
 goto EXECUTE_TESTS
 
 
 :EXECUTE_TESTS
+
 cls
 call :HEADER
 
@@ -188,21 +182,28 @@ goto MAIN_MENU
 
 
 :CHECK_PROJECT
+
 echo.
 echo [CHECK] Validando estrutura do projeto...
 
-for %%F in (
-    "scripts\run.py"
-    "scripts\configure_env.py"
-    "scripts\bootstrap_python_windows.ps1"
-    "requirements.txt"
-    "%ALLURE_CONFIG%"
-    "assets\topaz-logo.png"
-) do (
-    if not exist %%F (
-        echo [ERRO] %%~F nao foi encontrado.
-        exit /b 1
-    )
+if not exist "scripts\run.py" (
+    echo [ERRO] scripts\run.py nao foi encontrado.
+    exit /b 1
+)
+
+if not exist "scripts\configure_env.py" (
+    echo [ERRO] scripts\configure_env.py nao foi encontrado.
+    exit /b 1
+)
+
+if not exist "scripts\bootstrap_python_windows.ps1" (
+    echo [ERRO] scripts\bootstrap_python_windows.ps1 nao foi encontrado.
+    exit /b 1
+)
+
+if not exist "requirements.txt" (
+    echo [ERRO] requirements.txt nao foi encontrado.
+    exit /b 1
 )
 
 if not exist "features" (
@@ -215,6 +216,7 @@ exit /b 0
 
 
 :CHECK_PYTHON
+
 echo.
 echo [CHECK] Verificando Python...
 
@@ -235,7 +237,9 @@ if errorlevel 2 (
     exit /b 1
 )
 
+echo.
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "scripts\bootstrap_python_windows.ps1"
+
 if errorlevel 1 (
     echo.
     echo [ERRO] Nao foi possivel instalar Python automaticamente.
@@ -244,6 +248,7 @@ if errorlevel 1 (
 
 call :REFRESH_PYTHON_PATH
 call :RESOLVE_PYTHON
+
 if errorlevel 1 (
     echo.
     echo [ERRO] Python foi instalado, mas nao foi localizado nesta sessao.
@@ -252,13 +257,16 @@ if errorlevel 1 (
 )
 
 :PYTHON_FOUND
+
 for /f "tokens=*" %%V in ('call !PYTHON_CMD! --version 2^>^&1') do (
     echo [OK] %%V encontrado.
 )
+
 exit /b 0
 
 
 :RESOLVE_PYTHON
+
 set "PYTHON_CMD="
 
 python -c "import sys; raise SystemExit(0 if sys.version_info >= (3,10) else 1)" >nul 2>&1
@@ -290,16 +298,20 @@ exit /b 1
 
 
 :REFRESH_PYTHON_PATH
+
 for /f "usebackq delims=" %%P in (`powershell.exe -NoProfile -Command "[Environment]::GetEnvironmentVariable('Path','User')"`) do (
     set "PATH=!PATH!;%%P"
 )
+
 for /f "usebackq delims=" %%P in (`powershell.exe -NoProfile -Command "[Environment]::GetEnvironmentVariable('Path','Machine')"`) do (
     set "PATH=!PATH!;%%P"
 )
+
 exit /b 0
 
 
 :CONFIGURE_ENV
+
 echo.
 echo [CHECK] Verificando configuracao do ambiente...
 echo.
@@ -319,6 +331,7 @@ exit /b 0
 
 
 :SELECT_SCOPE
+
 echo ============================================================
 echo ESCOLHA O ESCOPO
 echo ============================================================
@@ -335,35 +348,34 @@ if "!SCOPE_CHOICE!"=="" set "SCOPE_CHOICE=1"
 
 set "SCOPE_ARG="
 set "TAGS_ARG="
-set "ALLURE_SCOPE=full"
 
 if "!SCOPE_CHOICE!"=="1" (
     set "SCOPE_DESCRIPTION=Suite completa"
-    exit /b 0
+    goto :eof
 )
+
 if "!SCOPE_CHOICE!"=="2" (
     set "SCOPE_DESCRIPTION=Smoke Tests (@smoke)"
     set "TAGS_ARG=--tags @smoke"
-    set "ALLURE_SCOPE=smoke"
-    exit /b 0
+    goto :eof
 )
+
 if "!SCOPE_CHOICE!"=="3" (
     set "SCOPE_DESCRIPTION=Login"
     set "SCOPE_ARG=--scope login"
-    set "ALLURE_SCOPE=login"
-    exit /b 0
+    goto :eof
 )
+
 if "!SCOPE_CHOICE!"=="4" (
     set "SCOPE_DESCRIPTION=Registro"
     set "SCOPE_ARG=--scope registration"
-    set "ALLURE_SCOPE=registration"
-    exit /b 0
+    goto :eof
 )
+
 if "!SCOPE_CHOICE!"=="5" (
     set "SCOPE_DESCRIPTION=Transferencia"
     set "SCOPE_ARG=--scope transfer"
-    set "ALLURE_SCOPE=transfer"
-    exit /b 0
+    goto :eof
 )
 
 echo.
@@ -373,6 +385,7 @@ goto SELECT_SCOPE
 
 
 :SELECT_BROWSER
+
 echo.
 echo ============================================================
 echo ESCOLHA O NAVEGADOR
@@ -388,15 +401,17 @@ if "!BROWSER_CHOICE!"=="" set "BROWSER_CHOICE=1"
 
 if "!BROWSER_CHOICE!"=="1" (
     set "BROWSER=chromium"
-    exit /b 0
+    goto :eof
 )
+
 if "!BROWSER_CHOICE!"=="2" (
     set "BROWSER=firefox"
-    exit /b 0
+    goto :eof
 )
+
 if "!BROWSER_CHOICE!"=="3" (
     set "BROWSER=webkit"
-    exit /b 0
+    goto :eof
 )
 
 echo.
@@ -405,6 +420,7 @@ goto SELECT_BROWSER
 
 
 :SELECT_MODE
+
 echo.
 echo ============================================================
 echo MODO DE EXECUCAO
@@ -412,73 +428,110 @@ echo ============================================================
 echo.
 
 choice /C SN /N /M "Executar exibindo o navegador? [S/N]: "
+
 if errorlevel 2 (
     set "HEADED_ARG="
     set "MODE_DESCRIPTION=Headless"
-    exit /b 0
+    goto :eof
 )
 
 set "HEADED_ARG=--headed"
 set "MODE_DESCRIPTION=Headed - navegador visivel"
-exit /b 0
+goto :eof
 
 
 :SELECT_REPORT
+
 echo.
 echo ============================================================
-echo RELATORIO ALLURE 3 - TOPAZ
+echo RELATORIO ALLURE
 echo ============================================================
 echo.
 
-choice /C SN /N /M "Deseja gerar o relatorio Allure personalizado ao final? [S/N]: "
+choice /C SN /N /M "Deseja gerar o relatorio Allure ao final? [S/N]: "
+
 if errorlevel 2 (
     set "GENERATE_REPORT=0"
     set "REPORT_DESCRIPTION=Apenas allure-results"
-    exit /b 0
+    goto :eof
 )
 
 set "GENERATE_REPORT=1"
-set "REPORT_DESCRIPTION=Allure 3 Awesome - Topaz"
-exit /b 0
+set "REPORT_DESCRIPTION=Gerar relatorio Allure"
+goto :eof
 
 
-:ENSURE_ALLURE3
+:ENSURE_ALLURE
+
 echo.
 echo ============================================================
-echo PREPARANDO ALLURE 3
+echo VERIFICANDO ALLURE REPORT
 echo ============================================================
 echo.
 
-call :ENSURE_NODE
-if errorlevel 1 exit /b 1
+set "ALLURE_AVAILABLE=0"
+set "ALLURE_MODE="
 
-call npx --yes allure@%ALLURE_VERSION% --version >nul 2>&1
-if errorlevel 1 (
-    echo [ERRO] Nao foi possivel preparar Allure %ALLURE_VERSION% via npx.
-    exit /b 1
-)
-
-for /f "tokens=*" %%V in ('call npx --yes allure@%ALLURE_VERSION% --version 2^>^&1') do (
-    echo [OK] Allure %%V pronto.
-)
-
-set "ALLURE_READY=1"
-exit /b 0
-
-
-:ENSURE_NODE
-where node >nul 2>&1
+where allure >nul 2>&1
 if not errorlevel 1 (
-    where npm >nul 2>&1
+    call allure --version >nul 2>&1
     if not errorlevel 1 (
-        echo [OK] Node.js e npm encontrados.
-        exit /b 0
+        set "ALLURE_AVAILABLE=1"
+        set "ALLURE_MODE=direct"
+        echo [OK] Allure encontrado.
+        goto :eof
     )
 )
 
+echo [INFO] Allure CLI nao foi encontrado.
+choice /C SN /N /M "Deseja instalar o Allure agora? [S/N]: "
+
+if errorlevel 2 (
+    set "GENERATE_REPORT=0"
+    goto :eof
+)
+
+call :ENSURE_NODE
+if errorlevel 1 (
+    set "GENERATE_REPORT=0"
+    goto :eof
+)
+
+call npm install -g allure
+
+if not errorlevel 1 (
+    call :REFRESH_NODE_PATH
+    where allure >nul 2>&1
+    if not errorlevel 1 (
+        set "ALLURE_AVAILABLE=1"
+        set "ALLURE_MODE=direct"
+        goto :eof
+    )
+)
+
+call npx --yes allure --version >nul 2>&1
+if not errorlevel 1 (
+    set "ALLURE_AVAILABLE=1"
+    set "ALLURE_MODE=npx"
+    goto :eof
+)
+
+echo [AVISO] Nao foi possivel preparar o Allure.
+set "GENERATE_REPORT=0"
+goto :eof
+
+
+:ENSURE_NODE
+
+where node >nul 2>&1
+if not errorlevel 1 (
+    where npm >nul 2>&1
+    if not errorlevel 1 exit /b 0
+)
+
 echo.
-echo [INFO] Node.js/npm nao foram encontrados.
-choice /C SN /N /M "Deseja instalar Node.js LTS automaticamente para gerar o Allure? [S/N]: "
+echo Node.js/npm nao foram encontrados.
+choice /C SN /N /M "Deseja instalar Node.js LTS automaticamente? [S/N]: "
 if errorlevel 2 exit /b 1
 
 where winget >nul 2>&1
@@ -502,81 +555,94 @@ exit /b 1
 
 
 :REFRESH_NODE_PATH
-if exist "%ProgramFiles%\nodejs" set "PATH=%ProgramFiles%\nodejs;%PATH%"
-if exist "%APPDATA%\npm" set "PATH=%APPDATA%\npm;%PATH%"
+
+if exist "%ProgramFiles%\nodejs" (
+    set "PATH=%ProgramFiles%\nodejs;%PATH%"
+)
+
+if exist "%APPDATA%\npm" (
+    set "PATH=%APPDATA%\npm;%PATH%"
+)
+
 exit /b 0
 
 
 :PROCESS_REPORT
+
 echo.
 echo ============================================================
-echo RELATORIO ALLURE 3 - TOPAZ
+echo RELATORIO ALLURE
 echo ============================================================
 echo.
 
 if not exist "%ALLURE_RESULTS%" (
     echo [AVISO] Resultados Allure nao encontrados.
-    exit /b 0
+    goto :eof
 )
 
 if "!GENERATE_REPORT!"=="0" (
     echo [INFO] Geracao do HTML nao foi solicitada.
-    exit /b 0
+    goto :eof
 )
 
-if "!ALLURE_READY!"=="0" (
-    echo [AVISO] Allure 3 nao esta disponivel.
-    exit /b 0
+if "!ALLURE_AVAILABLE!"=="0" (
+    echo [AVISO] Allure CLI nao esta disponivel.
+    goto :eof
 )
 
-if exist "%ALLURE_REPORT%" rmdir /S /Q "%ALLURE_REPORT%" >nul 2>&1
+if exist "%ALLURE_REPORT%" (
+    rmdir /S /Q "%ALLURE_REPORT%" >nul 2>&1
+)
 
-set "ALLURE_BROWSER=!BROWSER!"
+echo [ALLURE] Gerando relatorio HTML...
 
-echo [ALLURE] Gerando relatorio personalizado...
-echo [ALLURE] Config....: %ALLURE_CONFIG%
-echo [ALLURE] Tema......: Topaz / Awesome / dark
-echo [ALLURE] Escopo....: !ALLURE_SCOPE!
-echo [ALLURE] Browser...: !ALLURE_BROWSER!
-echo.
+if "!ALLURE_MODE!"=="npx" (
+    call npx --yes allure generate "%ALLURE_RESULTS%" --output "%ALLURE_REPORT%"
+) else (
+    call allure generate "%ALLURE_RESULTS%" --output "%ALLURE_REPORT%"
+)
 
-call npx --yes allure@%ALLURE_VERSION% generate "%ALLURE_RESULTS%" --config ".\%ALLURE_CONFIG%" --output "%ALLURE_REPORT%"
 if errorlevel 1 (
-    echo [ERRO] Nao foi possivel gerar o relatorio personalizado.
-    exit /b 0
+    echo [ERRO] Nao foi possivel gerar o relatorio.
+    goto :eof
 )
 
-if not exist "%ALLURE_REPORT%\index.html" (
-    echo [ERRO] index.html do Allure nao foi encontrado.
-    exit /b 0
-)
-
-echo.
-echo [OK] Relatorio Topaz gerado: %ALLURE_REPORT%
-echo.
+echo [OK] Relatorio Allure gerado: %ALLURE_REPORT%
 
 choice /C SN /N /M "Deseja abrir o relatorio Allure agora? [S/N]: "
-if errorlevel 2 exit /b 0
+if errorlevel 2 goto :eof
 
-start "Topaz - ParaBank Allure" cmd /k "npx --yes allure@%ALLURE_VERSION% open reports\allure-report"
-exit /b 0
+call :OPEN_ALLURE_REPORT
+goto :eof
+
+
+:OPEN_ALLURE_REPORT
+
+if "!ALLURE_MODE!"=="npx" (
+    start "ParaBank - Allure Report" cmd /k "npx --yes allure open reports\allure-report"
+) else (
+    start "ParaBank - Allure Report" cmd /k "call allure open reports\allure-report"
+)
+
+goto :eof
 
 
 :HEADER
+
 echo ============================================================
 echo.
 echo             PARABANK AUTOMATION BDD
-echo.
-echo              TOPAZ - QA AUTOMATION
 echo.
 echo        Playwright + Python + Behave + Docker
 echo.
 echo ============================================================
 echo.
-exit /b 0
+
+goto :eof
 
 
 :FATAL_ERROR
+
 echo.
 echo ============================================================
 echo NAO FOI POSSIVEL INICIAR A EXECUCAO
@@ -587,6 +653,7 @@ exit /b 1
 
 
 :END_USER
+
 echo.
 echo Execucao cancelada pelo usuario.
 echo.
@@ -595,6 +662,7 @@ exit /b 0
 
 
 :END
+
 echo.
 echo Pressione qualquer tecla para fechar esta janela.
 pause >nul

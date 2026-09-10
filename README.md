@@ -1,12 +1,12 @@
 <p align="center">
-  <img src="assets/topaz-brand.webp" alt="Topaz | Stefanini" width="420" />
+  <img src="assets/topaz-readme.jpeg" alt="Topaz | Stefanini" width="334" />
 </p>
 
 <h1 align="center">ParaBank Automation BDD</h1>
 
 <p align="center">
   Framework E2E com <strong>Python + Playwright + Behave</strong>, ambiente determinístico em Docker,<br/>
-  validações UI + API, relatórios Allure 3 e CI/CD cross-browser.
+  validações UI + API, relatórios Allure e CI/CD cross-browser.
 </p>
 
 <p align="center">
@@ -17,7 +17,7 @@
   <img src="https://img.shields.io/badge/Playwright-1.62-2EAD33?logo=playwright&logoColor=white" alt="Playwright" />
   <img src="https://img.shields.io/badge/BDD-Behave-6A5ACD" alt="Behave BDD" />
   <img src="https://img.shields.io/badge/Docker-Local-2496ED?logo=docker&logoColor=white" alt="Docker" />
-  <img src="https://img.shields.io/badge/Allure-3.17-FF6A00" alt="Allure 3" />
+  <img src="https://img.shields.io/badge/Allure-Report-FF6A00" alt="Allure Report" />
 </p>
 
 ---
@@ -26,20 +26,19 @@
 
 Este projeto automatiza os fluxos de **Login/Logout**, **Registro de Usuário** e **Transferência de Fundos** do ParaBank.
 
-A solução foi estruturada para ir além de uma suíte de scripts de interface. O foco foi construir um framework com **isolamento de dados**, **pré-condições via API**, **validação de efeitos persistidos**, **ambiente reproduzível**, **evidências de falha** e **quality gates em CI/CD**.
+A solução foi estruturada para demonstrar uma estratégia de automação sustentável, com **isolamento de dados**, **pré-condições via API**, **validação de efeitos persistidos**, **ambiente reproduzível**, **evidências de falha** e **quality gates em CI/CD**.
 
 ### ✨ Destaques
 
 - **24 cenários E2E** orientados a risco e regra de negócio;
-- **117 steps** na regressão completa;
-- execução local contra uma instância limpa do ParaBank em Docker;
+- **117 steps** na regressão completa de referência;
+- execução contra uma instância limpa do ParaBank em Docker;
 - massa exclusiva e dinâmica por cenário;
 - Page Object Model para desacoplar UI e comportamento;
 - preparação de pré-condições via backend quando apropriado;
 - validações cruzadas entre interface e API;
 - `BrowserContext` independente por cenário;
-- screenshots, URL e erros de console anexados em falhas;
-- relatório **Allure 3 Awesome** com identidade visual Topaz;
+- screenshot anexado ao Allure em caso de falha;
 - regressão completa em Chromium como quality gate;
 - smoke cross-browser em Firefox e WebKit;
 - bootstrap para Windows, Linux e macOS.
@@ -57,14 +56,14 @@ A solução foi estruturada para ir além de uma suíte de scripts de interface.
 | **Requests** | Setup e validações de backend |
 | **Pydantic Settings** | Configuração centralizada |
 | **Docker / Compose** | Ambiente ParaBank descartável |
-| **Allure 3** | Evidências e relatório visual |
+| **Allure Report** | Evidências e relatório HTML |
 | **GitHub Actions** | CI/CD e quality gates |
 
 ---
 
 ## 🧠 Estratégia de testes
 
-A automação segue um princípio simples:
+A automação segue uma separação clara de responsabilidades:
 
 ```text
 pré-condição técnica      → API / backend
@@ -163,8 +162,7 @@ nenhuma transação criada
 │   └── workflows/
 │       └── e2e.yml
 ├── assets/
-│   ├── topaz-brand.webp
-│   └── topaz-logo.png
+│   └── topaz-readme.jpeg
 ├── config/
 │   └── settings.py
 ├── features/
@@ -192,7 +190,6 @@ nenhuma transação criada
 │   └── parabank_api_client.py
 ├── utils/
 │   └── test_data.py
-├── allurerc.yml
 ├── behave.ini
 ├── compose.yaml
 ├── requirements.txt
@@ -378,37 +375,15 @@ python scripts/run.py --no-docker-install
 
 ---
 
-## 📊 Allure Report 3 — Topaz
+## 📊 Allure Report
 
-Os wrappers `run_tests.bat` e `run_tests.sh` utilizam **Allure 3.17.0** explicitamente e geram o relatório com:
-
-```text
-allurerc.yml
-```
-
-A configuração aplica:
-
-- **Awesome Report**;
-- identidade visual Topaz;
-- tema escuro;
-- nome personalizado do relatório;
-- variáveis de projeto e ambiente;
-- labels para navegação e filtros;
-- categorização de falhas;
-- expansão automática do contexto relevante de erro;
-- ordenação por status.
-
-Quando um step falha, são anexados automaticamente:
-
-- screenshot full-page;
-- URL atual;
-- erros relevantes do console do browser.
-
-Resultados brutos:
+Os testes geram resultados compatíveis com Allure em:
 
 ```text
 reports/allure-results
 ```
+
+Os wrappers `run_tests.bat` e `run_tests.sh` podem gerar o relatório HTML padrão ao final da execução. Em caso de falha de um step, a suíte anexa automaticamente uma screenshot da página ao resultado.
 
 HTML gerado:
 
@@ -416,19 +391,19 @@ HTML gerado:
 reports/allure-report
 ```
 
-Geração manual, utilizando exatamente a mesma configuração do runner e do CI:
+Geração manual:
 
 ```bash
-npx --yes allure@3.17.0 generate reports/allure-results \
-  --config ./allurerc.yml \
-  --output reports/allure-report
+allure generate reports/allure-results --output reports/allure-report
 ```
 
 Abrir o relatório:
 
 ```bash
-npx --yes allure@3.17.0 open reports/allure-report
+allure open reports/allure-report
 ```
+
+O CI também armazena tanto os resultados brutos quanto o relatório HTML como artifacts quando disponíveis.
 
 ---
 
@@ -459,7 +434,7 @@ ParaBank local + banco limpo
   ↓
 regressão completa
   ↓
-Allure 3 personalizado
+Allure Report
   ↓
 quality gate
 ```
@@ -528,6 +503,5 @@ Regressão completa validada no pipeline:
 ---
 
 <p align="center">
-  <strong>Topaz | ParaBank QA Automation</strong><br/>
   Python · Playwright · Behave · Docker · Allure · GitHub Actions
 </p>
