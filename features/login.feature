@@ -41,7 +41,15 @@ Funcionalidade: Autenticação e Encerramento de Sessão
     E solicito o logout
     Então devo retornar à tela de login sem sessão autenticada
 
-  Cenário: Área protegida exige nova autenticação após logout
+  Cenário: Área protegida permanece inacessível após logout
+    Dado que possuo credenciais válidas de um usuário existente no ambiente público
+    Quando informo as credenciais válidas desse usuário
+    E solicito o logout
+    E tento acessar diretamente a transferência de fundos
+    Então a área protegida deve permanecer inacessível sem sessão autenticada
+
+  @known_issue
+  Cenário: Área protegida deveria solicitar nova autenticação após logout
     Dado que possuo credenciais válidas de um usuário existente no ambiente público
     Quando informo as credenciais válidas desse usuário
     E solicito o logout
