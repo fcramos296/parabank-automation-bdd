@@ -6,7 +6,7 @@ Funcionalidade: Transferência de Fundos
   Para gerenciar meus saldos disponíveis
 
   Contexto:
-    Dado que estou autenticado com um usuário provisionado via backend e possuo duas contas
+    Dado que estou autenticado com um usuário existente do ambiente público e possuo duas contas
     E navego para a tela de transferência de fundos
 
   @smoke

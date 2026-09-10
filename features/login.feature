@@ -11,8 +11,8 @@ Funcionalidade: Autenticação de Usuário
 
   @smoke
   Cenário: Login efetuado com credenciais válidas
-    Dado que existe um usuário registrado via backend com credenciais válidas
-    Quando informo o usuário e senha cadastrados
+    Dado que possuo credenciais válidas de um usuário existente no ambiente público
+    Quando informo as credenciais válidas desse usuário
     Então devo estar autenticado e visualizar os serviços da conta
 
   Cenário: Falha de login com credenciais inexistentes

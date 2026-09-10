@@ -7,36 +7,97 @@ from behave import (
     when,
 )
 
+from config.settings import settings
 from pages.login_page import LoginPage
 from pages.transfer_page import TransferPage
-from services.parabank_api_client import (
-    AccountType,
-)
-from utils.test_data import build_customer
+
+
+def _account_balance(
+    account: dict,
+) -> Decimal:
+    try:
+        return Decimal(
+            str(
+                account["balance"]
+            )
+        )
+    except (
+        KeyError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise AssertionError(
+            "Unexpected account payload "
+            f"without a valid balance: {account!r}"
+        ) from exc
+
+
+def _select_existing_accounts(
+    accounts: list[dict],
+) -> tuple[dict, dict]:
+    if len(accounts) < 2:
+        raise AssertionError(
+            "The configured public customer must "
+            "have at least two existing accounts."
+        )
+
+    try:
+        source = max(
+            accounts,
+            key=lambda account: (
+                _account_balance(account),
+                int(account["id"]),
+            ),
+        )
+
+        remaining = [
+            account
+            for account in accounts
+            if int(account["id"])
+            != int(source["id"])
+        ]
+
+        target = max(
+            remaining,
+            key=lambda account: int(
+                account["id"]
+            ),
+        )
+
+    except (
+        KeyError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise AssertionError(
+            "Unexpected account payload returned "
+            "for the configured public customer: "
+            f"{accounts!r}"
+        ) from exc
+
+    return source, target
 
 
 @given(
     "que estou autenticado com um usuário "
-    "provisionado via backend e possuo "
+    "existente do ambiente público e possuo "
     "duas contas"
 )
 def step_auth_with_two_accounts(
     context,
 ) -> None:
-    customer = build_customer(
-        "transfer"
+    username = (
+        settings.PUBLIC_EXISTING_USERNAME
     )
 
-    context.transfer_customer = customer
-
-    context.api_client.register_user(
-        customer.registration_payload()
+    password = (
+        settings.public_existing_password
     )
 
     customer_data = (
         context.api_client.login_customer(
-            customer.username,
-            customer.password,
+            username,
+            password,
         )
     )
 
@@ -55,37 +116,19 @@ def step_auth_with_two_accounts(
         )
     )
 
-    assert accounts, (
-        "The provisioned customer "
-        "has no account."
+    (
+        source_account,
+        target_account,
+    ) = _select_existing_accounts(
+        accounts
     )
 
     context.from_account_id = int(
-        accounts[0]["id"]
-    )
-
-    target_account = (
-        context.api_client.create_account(
-            customer_id=customer_id,
-            account_type=(
-                AccountType.SAVINGS
-            ),
-            from_account_id=(
-                context.from_account_id
-            ),
-        )
+        source_account["id"]
     )
 
     context.to_account_id = int(
         target_account["id"]
-    )
-
-    assert (
-        context.from_account_id
-        != context.to_account_id
-    ), (
-        "Transfer setup must use "
-        "two different accounts."
     )
 
     context.from_balance_before = (
@@ -109,8 +152,8 @@ def step_auth_with_two_accounts(
     login_page.open()
 
     login_page.login(
-        customer.username,
-        customer.password,
+        username,
+        password,
     )
 
     login_page.validate_login_success()
@@ -141,6 +184,19 @@ def step_transfer_funds(
     context.transferred_amount = Decimal(
         amount
     )
+
+    if (
+        context.from_balance_before
+        < context.transferred_amount
+    ):
+        raise AssertionError(
+            "The selected public source account "
+            "does not have enough balance for "
+            f"the transfer. Account: "
+            f"{context.from_account_id}. "
+            f"Balance: {context.from_balance_before}. "
+            f"Required: {context.transferred_amount}."
+        )
 
     context.transfer_page.transfer(
         amount=amount,

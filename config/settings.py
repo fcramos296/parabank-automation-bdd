@@ -24,8 +24,6 @@ class Settings(BaseSettings):
 
     PW_NAVIGATION_TIMEOUT_MS: int = 15_000
 
-    # O ambiente público pode apresentar latência,
-    # principalmente quando acessado através do Scrape.do.
     REQUEST_TIMEOUT_SECONDS: float = 30.0
 
     BACKEND_TRANSPORT: Literal[
@@ -42,6 +40,12 @@ class Settings(BaseSettings):
     BLOCK_NONESSENTIAL_RESOURCES: bool = True
 
     UI_SCENARIO_DELAY_SECONDS: float = 2.0
+
+    PUBLIC_EXISTING_USERNAME: str = "john"
+
+    PUBLIC_EXISTING_PASSWORD: SecretStr = (
+        SecretStr("demo")
+    )
 
     SCRAPE_DO_TOKEN: SecretStr | None = None
 
@@ -69,6 +73,16 @@ class Settings(BaseSettings):
         return (
             f"{self.BASE_URL.rstrip('/')}"
             "/services/bank"
+        )
+
+    @property
+    def public_existing_password(
+        self,
+    ) -> str:
+        return (
+            self.PUBLIC_EXISTING_PASSWORD
+            .get_secret_value()
+            .strip()
         )
 
     @property
@@ -103,6 +117,18 @@ class Settings(BaseSettings):
                 "SCRAPE_DO_TOKEN is required "
                 "when a Scrape.do transport "
                 "is enabled."
+            )
+
+        if not self.PUBLIC_EXISTING_USERNAME.strip():
+            raise ValueError(
+                "PUBLIC_EXISTING_USERNAME "
+                "cannot be empty."
+            )
+
+        if not self.public_existing_password:
+            raise ValueError(
+                "PUBLIC_EXISTING_PASSWORD "
+                "cannot be empty."
             )
 
         if self.REQUEST_TIMEOUT_SECONDS <= 0:

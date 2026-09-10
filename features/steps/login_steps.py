@@ -5,11 +5,9 @@ from behave import (
     when,
 )
 
+from config.settings import settings
 from pages.login_page import LoginPage
-from utils.test_data import (
-    build_customer,
-    unique_username,
-)
+from utils.test_data import unique_username
 
 
 @given("que estou na tela de login")
@@ -24,33 +22,31 @@ def step_open_login(
 
 
 @given(
-    "que existe um usuário registrado "
-    "via backend com credenciais válidas"
+    "que possuo credenciais válidas de um "
+    "usuário existente no ambiente público"
 )
-def step_create_valid_user_via_backend(
+def step_use_existing_public_user(
     context,
 ) -> None:
-    context.seeded_customer = (
-        build_customer(
-            "login"
-        )
+    context.login_username = (
+        settings.PUBLIC_EXISTING_USERNAME
     )
 
-    context.api_client.register_user(
-        context.seeded_customer
-        .registration_payload()
+    context.login_password = (
+        settings.public_existing_password
     )
 
 
 @when(
-    "informo o usuário e senha cadastrados"
+    "informo as credenciais válidas "
+    "desse usuário"
 )
-def step_login_with_seeded_credentials(
+def step_login_with_existing_credentials(
     context,
 ) -> None:
     context.login_page.login(
-        context.seeded_customer.username,
-        context.seeded_customer.password,
+        context.login_username,
+        context.login_password,
     )
 
 
