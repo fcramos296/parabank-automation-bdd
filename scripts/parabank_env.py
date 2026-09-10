@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import shutil
 import subprocess
 import time
 from pathlib import Path
+from typing import Sequence
 from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, Request, build_opener
 
@@ -54,50 +54,14 @@ def parabank_is_ready(base_url: str) -> bool:
         return False
 
 
-def _validate_docker() -> None:
-    if shutil.which("docker") is None:
-        raise RuntimeError(
-            "Docker não foi encontrado no PATH. "
-            "Instale Docker Desktop ou Docker Engine "
-            "antes de executar a suíte local."
-        )
-
-    try:
-        subprocess.run(
-            ["docker", "info"],
-            cwd=PROJECT_ROOT,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=True,
-        )
-    except subprocess.CalledProcessError as exc:
-        raise RuntimeError(
-            "Docker foi encontrado, mas o daemon "
-            "não está disponível. Verifique se o "
-            "Docker está iniciado."
-        ) from exc
-
-    try:
-        subprocess.run(
-            ["docker", "compose", "version"],
-            cwd=PROJECT_ROOT,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=True,
-        )
-    except subprocess.CalledProcessError as exc:
-        raise RuntimeError(
-            "O plugin Docker Compose não está disponível."
-        ) from exc
-
-
 def _compose_command(
+    docker_command: Sequence[str],
     *args: str,
     check: bool = True,
 ) -> subprocess.CompletedProcess:
     return subprocess.run(
         [
-            "docker",
+            *docker_command,
             "compose",
             "-f",
             str(COMPOSE_FILE),
@@ -108,12 +72,15 @@ def _compose_command(
     )
 
 
-def _show_container_logs() -> None:
+def _show_container_logs(
+    docker_command: Sequence[str],
+) -> None:
     print()
     print("[environment] Últimos logs do ParaBank:")
     print()
 
     _compose_command(
+        docker_command,
         "logs",
         "--no-color",
         "--tail",
@@ -125,6 +92,7 @@ def _show_container_logs() -> None:
 
 def recreate_local_parabank(
     *,
+    docker_command: Sequence[str],
     base_url: str,
     startup_timeout_seconds: float,
 ) -> None:
@@ -133,14 +101,13 @@ def recreate_local_parabank(
             "compose.yaml não foi encontrado."
         )
 
-    _validate_docker()
-
     print(
         "[environment] Recriando ParaBank local "
         "com banco limpo..."
     )
 
     _compose_command(
+        docker_command,
         "down",
         "--volumes",
         "--remove-orphans",
@@ -149,6 +116,7 @@ def recreate_local_parabank(
 
     try:
         _compose_command(
+            docker_command,
             "up",
             "-d",
         )
@@ -172,7 +140,9 @@ def recreate_local_parabank(
 
         time.sleep(2)
 
-    _show_container_logs()
+    _show_container_logs(
+        docker_command
+    )
 
     raise RuntimeError(
         "O container ParaBank foi iniciado, mas a "
@@ -181,15 +151,15 @@ def recreate_local_parabank(
     )
 
 
-def stop_local_parabank() -> None:
-    if shutil.which("docker") is None:
-        return
-
+def stop_local_parabank(
+    docker_command: Sequence[str],
+) -> None:
     print(
         "[environment] Encerrando ParaBank local..."
     )
 
     _compose_command(
+        docker_command,
         "down",
         "--volumes",
         "--remove-orphans",
