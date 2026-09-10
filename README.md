@@ -1,11 +1,12 @@
 <p align="center">
-  <img src="assets/topaz-logo.png" alt="Topaz" width="380" />
+  <img src="assets/topaz-brand.webp" alt="Topaz | Stefanini" width="420" />
 </p>
 
 <h1 align="center">ParaBank Automation BDD</h1>
 
 <p align="center">
-  Automação funcional E2E com ambiente determinístico, validações UI + API e pipeline CI/CD.
+  Framework E2E com <strong>Python + Playwright + Behave</strong>, ambiente determinístico em Docker,<br/>
+  validações UI + API, relatórios Allure 3 e CI/CD cross-browser.
 </p>
 
 <p align="center">
@@ -23,23 +24,25 @@
 
 ## 📌 Sobre o projeto
 
-Este projeto automatiza os fluxos de **Login/Logout**, **Registro de Usuário** e **Transferência de Fundos** do ParaBank utilizando **Python + Playwright + Behave**, com cenários escritos em **Gherkin/BDD**, arquitetura baseada em **Page Object Model**, preparação de massa via backend e validações cruzadas entre interface e API.
+Este projeto automatiza os fluxos de **Login/Logout**, **Registro de Usuário** e **Transferência de Fundos** do ParaBank.
 
-A proposta não é apenas automatizar cliques. O projeto foi estruturado para demonstrar uma abordagem de QA mais próxima de um cenário real: isolamento de dados, ambiente reproduzível, evidências de falha, assertions de persistência e pipeline de qualidade.
+A solução foi estruturada para ir além de uma suíte de scripts de interface. O foco foi construir um framework com **isolamento de dados**, **pré-condições via API**, **validação de efeitos persistidos**, **ambiente reproduzível**, **evidências de falha** e **quality gates em CI/CD**.
 
 ### ✨ Destaques
 
-- **24 cenários E2E** focados em risco e regra de negócio;
-- **117 steps** validados na regressão final em Chromium;
-- dados exclusivos e dinâmicos por cenário;
-- pré-condições preparadas via API quando o comportamento em teste não é a criação da massa;
-- validação do resultado visível na UI e do efeito persistido no backend;
-- ambiente ParaBank descartável com Docker;
-- `BrowserContext` novo por cenário;
-- screenshots, URL e erros de console anexados ao Allure em falhas;
-- relatório **Allure 3 Awesome** personalizado com identidade visual Topaz;
-- CI/CD com regressão completa e smoke cross-browser;
-- execução reproduzível em Windows, Linux, macOS e GitHub Actions.
+- **24 cenários E2E** orientados a risco e regra de negócio;
+- **117 steps** na regressão completa;
+- execução local contra uma instância limpa do ParaBank em Docker;
+- massa exclusiva e dinâmica por cenário;
+- Page Object Model para desacoplar UI e comportamento;
+- preparação de pré-condições via backend quando apropriado;
+- validações cruzadas entre interface e API;
+- `BrowserContext` independente por cenário;
+- screenshots, URL e erros de console anexados em falhas;
+- relatório **Allure 3 Awesome** com identidade visual Topaz;
+- regressão completa em Chromium como quality gate;
+- smoke cross-browser em Firefox e WebKit;
+- bootstrap para Windows, Linux e macOS.
 
 ---
 
@@ -48,114 +51,111 @@ A proposta não é apenas automatizar cliques. O projeto foi estruturado para de
 | Tecnologia | Responsabilidade |
 | --- | --- |
 | **Python** | Linguagem principal do framework |
-| **Playwright** | Automação e assertions da interface web |
+| **Playwright** | Automação web e assertions de interface |
 | **Behave** | Runner BDD |
-| **Gherkin** | Especificação funcional dos cenários |
+| **Gherkin** | Especificação dos comportamentos |
 | **Requests** | Setup e validações de backend |
-| **Pydantic Settings** | Configuração centralizada do ambiente |
-| **Docker / Compose** | Ambiente ParaBank local e descartável |
+| **Pydantic Settings** | Configuração centralizada |
+| **Docker / Compose** | Ambiente ParaBank descartável |
 | **Allure 3** | Evidências e relatório visual |
 | **GitHub Actions** | CI/CD e quality gates |
 
 ---
 
-## 🧪 Cobertura
+## 🧠 Estratégia de testes
 
-A suíte cobre exclusivamente os três fluxos definidos para a entrega.
+A automação segue um princípio simples:
+
+```text
+pré-condição técnica      → API / backend
+comportamento do usuário  → UI / Playwright
+efeito persistido         → API / backend
+evidência                  → Allure
+```
+
+Isso evita executar pela interface etapas que não são o comportamento em teste e reduz tempo, acoplamento e flakiness.
 
 ### 🔐 Login e Logout — 10 cenários
 
-Cobertura principal:
+Cobertura:
 
-- login com credenciais válidas;
+- login válido;
 - persistência da sessão após reload;
-- login válido após uma tentativa anterior com senha incorreta;
+- recuperação após uma tentativa com senha incorreta;
 - usuário inexistente;
 - senha incorreta para usuário existente;
 - username vazio;
 - senha vazia;
-- username e senha vazios;
-- logout encerrando efetivamente a sessão;
-- bloqueio de acesso direto a área protegida após logout.
+- ambos os campos vazios;
+- logout encerrando a sessão;
+- bloqueio de área protegida após logout.
 
-Quando o comportamento em teste é autenticação, o usuário é criado previamente via backend. Dessa forma, falhas no cadastro não contaminam os testes de login.
+Usuários necessários como pré-condição são provisionados via backend para que o cenário exercite exclusivamente autenticação e sessão.
 
 ### 👤 Registro de Usuário — 6 cenários
 
-Cobertura principal:
+Cobertura:
 
-- cadastro válido com todos os campos;
-- persistência dos dados do cliente;
-- autenticação backend do cliente recém-cadastrado;
-- criação automática da conta inicial `CHECKING`;
+- cadastro completo válido;
+- persistência dos dados informados;
+- autenticação backend do cliente criado;
+- criação automática da conta `CHECKING`;
 - validação do saldo inicial `515.50`;
-- cadastro sem telefone opcional;
+- telefone opcional não informado;
 - persistência do telefone vazio;
-- username e senha com exatamente 20 caracteres, validando o limite suportado;
-- validação conjunta dos campos obrigatórios;
+- username e senha no boundary de 20 caracteres;
+- validação conjunta de campos obrigatórios;
 - confirmação de senha divergente;
 - username duplicado.
 
-Quando registro é o comportamento em teste, a criação do usuário é feita pela **UI**. A API é utilizada depois da ação para verificar persistência e efeitos do fluxo.
+Quando **registro** é o comportamento em teste, o cadastro ocorre pela interface. A API é utilizada somente depois da ação para confirmar os efeitos persistidos.
 
 ### 💸 Transferência de Fundos — 8 cenários
 
-Cada cenário recebe um cliente exclusivo com duas contas próprias.
+Cobertura:
 
-Cobertura principal:
-
-- transferência positiva com valor comum;
-- menor valor monetário com duas casas decimais: `0.01`;
-- transferência no sentido inverso entre as contas;
+- transferência com valor monetário comum;
+- boundary mínimo de `0.01`;
+- transferência no sentido inverso entre duas contas;
 - transferência de todo o saldo disponível;
-- saldo da conta de origem igual a zero após transferência integral;
-- dropdowns exibindo apenas contas do cliente autenticado;
-- conta pertencente a outro cliente ausente dos seletores;
+- saldo de origem final igual a `0.00`;
+- seletores exibindo somente contas do cliente autenticado;
+- exclusão de conta pertencente a outro cliente;
 - valor vazio;
 - valor textual;
-- formato monetário com vírgula;
-- confirmação de valor, origem e destino na UI;
-- lançamento `Debit / Funds Transfer Sent` na origem;
-- lançamento `Credit / Funds Transfer Received` no destino;
-- validação exata dos saldos após operações válidas;
-- saldos inalterados em operações rejeitadas;
-- ausência de transações criadas em operações rejeitadas.
+- formato monetário com vírgula.
 
-> **Nota de domínio:** o ParaBank permite saldo negativo na implementação atual. Por isso, a suíte não cria artificialmente uma regra de rejeição por saldo insuficiente que o produto não implementa.
+Nas transferências válidas a suíte verifica:
+
+```text
+confirmação na UI
+      ↓
+conta origem / destino
+      ↓
+Debit - Funds Transfer Sent
+      ↓
+Credit - Funds Transfer Received
+      ↓
+saldos exatos no backend
+```
+
+Nas tentativas rejeitadas:
+
+```text
+erro funcional
+      ↓
+saldo origem inalterado
+      ↓
+saldo destino inalterado
+      ↓
+nenhuma transação criada
+```
+
+> O projeto não cria uma expectativa de rejeição por saldo insuficiente porque a implementação atual do ParaBank permite saldo negativo. A cobertura segue o comportamento de domínio existente em vez de inventar uma regra não implementada.
 
 ---
 
 ## 🏗️ Arquitetura
-
-```text
-Gherkin / Features
-        │
-        ▼
-Behave Steps
-        │
-        ├──────────────► API Client / Test Data
-        │                       │
-        ▼                       ▼
-Page Objects              Backend ParaBank
-        │                       │
-        └──────────────┬────────┘
-                       ▼
-             Validação UI + Estado
-```
-
-### Organização de responsabilidades
-
-- **Features** descrevem o comportamento esperado em linguagem de negócio;
-- **Steps** coordenam fluxo, massa e assertions;
-- **Page Objects** encapsulam seletores e interações da UI;
-- **Services** centralizam chamadas ao backend;
-- **Utils** concentram geração de dados reutilizáveis;
-- **Environment hooks** controlam browser, isolamento e evidências;
-- **Runner** prepara dependências, Docker, execução e teardown.
-
----
-
-## 📁 Estrutura do projeto
 
 ```text
 .
@@ -163,18 +163,19 @@ Page Objects              Backend ParaBank
 │   └── workflows/
 │       └── e2e.yml
 ├── assets/
+│   ├── topaz-brand.webp
 │   └── topaz-logo.png
 ├── config/
 │   └── settings.py
 ├── features/
-│   ├── steps/
-│   │   ├── login_steps.py
-│   │   ├── registration_steps.py
-│   │   └── transfer_steps.py
 │   ├── environment.py
 │   ├── login.feature
 │   ├── registration.feature
-│   └── transfer.feature
+│   ├── transfer.feature
+│   └── steps/
+│       ├── login_steps.py
+│       ├── registration_steps.py
+│       └── transfer_steps.py
 ├── pages/
 │   ├── base_page.py
 │   ├── login_page.py
@@ -199,19 +200,59 @@ Page Objects              Backend ParaBank
 └── run_tests.sh
 ```
 
+### Page Object Model
+
+Os Page Objects concentram seletores, ações e assertions específicas da interface. As steps do Behave descrevem o comportamento e coordenam Page Objects, dados e serviços, sem espalhar detalhes de UI pelas features.
+
+### Isolamento
+
+Cada cenário recebe um novo `BrowserContext` do Playwright. Dados de negócio são gerados dinamicamente e usuários/contas são exclusivos quando necessário.
+
+---
+
+## 🐳 Por que executar o ParaBank localmente?
+
+Durante o desenvolvimento, a instância pública do ParaBank apresentou comportamento instável e estado compartilhado entre usuários. Isso dificultava distinguir defeitos reais de interferência externa e impedia assertions determinísticas sobre contas, saldos e transações.
+
+A versão final utiliza a imagem oficial do ParaBank em Docker:
+
+```text
+docker compose down --volumes --remove-orphans
+                ↓
+docker compose up -d
+                ↓
+aguarda ParaBank ficar disponível
+                ↓
+executa os testes
+                ↓
+gera evidências
+                ↓
+docker compose down --volumes --remove-orphans
+```
+
+Benefícios:
+
+- banco limpo a cada execução;
+- ausência de usuários compartilhados;
+- estado previsível;
+- massa exclusiva;
+- maior força nas assertions;
+- mesma topologia de execução local e CI;
+- nenhuma dependência do ambiente público ou de serviços de terceiros.
+
 ---
 
 ## 🚀 Execução rápida
 
 ### Windows
 
-A forma mais simples é utilizar o runner interativo:
+Experiência guiada:
 
 ```powershell
 run_tests.bat
 ```
 
-Ou executar diretamente:
+Se Python já estiver disponível:
 
 ```powershell
 python scripts/run.py
@@ -234,180 +275,134 @@ python3 scripts/run.py
 
 ## ⚙️ Bootstrap automático
 
-Os wrappers foram preparados para reduzir o setup manual em uma máquina nova.
+Os wrappers reduzem ao mínimo os pré-requisitos de uma máquina nova.
 
 ### Windows
 
-O fluxo pode preparar, quando necessário e autorizado:
+O fluxo pode preparar, mediante autorização:
 
 - Python 3.10+;
 - WSL 2;
-- recursos de virtualização necessários ao WSL;
+- Virtual Machine Platform;
+- atualização do WSL;
 - Docker Desktop;
 - Docker Compose;
-- ambiente virtual Python;
-- dependências do projeto;
-- browser Playwright;
+- `.venv`;
+- dependências Python;
+- browser do Playwright;
 - container ParaBank.
 
-Algumas alterações do Windows podem exigir reinicialização. Virtualização Intel VT-x / AMD-V desabilitada no BIOS/UEFI precisa ser habilitada manualmente.
+Se o Windows exigir reinicialização após habilitar WSL/virtualização, o runner encerra de forma controlada e orienta a nova execução.
+
+> Virtualização Intel VT-x / AMD-V desabilitada no BIOS/UEFI não pode ser habilitada com segurança pelo projeto; nesse caso o requisito é informado ao usuário.
 
 ### Linux
 
-Há suporte para instalação via gerenciadores compatíveis com:
-
-- `apt`;
-- `dnf`;
-- `yum`;
-- `pacman`;
-- `zypper`.
-
-O runner pode preparar Python, venv, Docker Engine, Compose, dependências e Playwright.
+O fluxo suporta caminhos baseados em `apt`, `dnf`, `yum`, `pacman` e `zypper` para preparar Python e dependências de sistema. Docker Engine e Compose plugin são utilizados nativamente.
 
 ### macOS
 
-O fluxo pode preparar Python, Homebrew quando necessário, Docker Desktop, dependências e Playwright.
+O fluxo pode preparar Python, Homebrew quando necessário, Docker Desktop, Compose, Playwright e o ParaBank. A primeira inicialização do Docker Desktop pode exigir permissões do sistema ou aceite dos termos do produto.
 
 Detalhes adicionais: [`DOCKER_SETUP.md`](DOCKER_SETUP.md).
 
 ---
 
-## 🐳 Por que executar o ParaBank localmente?
+## 🧪 Comandos úteis
 
-Durante a homologação da automação, o ambiente público apresentou comportamento inconsistente em operações dependentes de contas de clientes recém-cadastrados, além de possuir estado compartilhado entre usuários.
+Suíte completa:
 
-Para uma suíte de regressão confiável, depender desse ambiente exigiria aceitar interferência externa ou criar workarounds que enfraqueceriam as assertions.
-
-A solução adotada foi utilizar a imagem oficial do ParaBank em Docker e recriar o banco antes de cada execução.
-
-### Benefícios
-
-- ambiente limpo e previsível;
-- ausência de dependência de massa compartilhada;
-- clientes e contas exclusivos;
-- saldos determinísticos;
-- assertions mais fortes;
-- nenhuma dependência de proxy ou segredo externo;
-- mesmo comportamento de execução local e no CI;
-- teardown automático após a suíte.
-
-### Ciclo padrão
-
-```text
-docker compose down --volumes --remove-orphans
-                ↓
-docker compose up -d
-                ↓
-aguarda health/readiness do ParaBank
-                ↓
-executa a suíte
-                ↓
-gera evidências
-                ↓
-docker compose down --volumes --remove-orphans
+```bash
+python scripts/run.py
 ```
 
-Para manter o ambiente ativo após os testes:
+Login/logout:
+
+```bash
+python scripts/run.py --scope login
+```
+
+Registro:
+
+```bash
+python scripts/run.py --scope registration
+```
+
+Transferência:
+
+```bash
+python scripts/run.py --scope transfer
+```
+
+Smoke:
+
+```bash
+python scripts/run.py --tags "@smoke"
+```
+
+Browser visível:
+
+```bash
+python scripts/run.py --headed
+```
+
+Firefox:
+
+```bash
+python scripts/run.py --browser firefox
+```
+
+WebKit:
+
+```bash
+python scripts/run.py --browser webkit
+```
+
+Manter o ParaBank ativo após os testes:
 
 ```bash
 python scripts/run.py --keep-environment
 ```
 
-Aplicação local:
+Autorizar instalação automática de Docker:
 
-```text
-http://localhost:8080/parabank
+```bash
+python scripts/run.py --install-docker
+```
+
+Impedir instalação automática de Docker:
+
+```bash
+python scripts/run.py --no-docker-install
 ```
 
 ---
 
-## 🎯 Comandos úteis
+## 📊 Allure Report 3 — Topaz
 
-| Objetivo | Comando |
-| --- | --- |
-| Suíte completa | `python scripts/run.py` |
-| Login/Logout | `python scripts/run.py --scope login` |
-| Registro | `python scripts/run.py --scope registration` |
-| Transferência | `python scripts/run.py --scope transfer` |
-| Smoke | `python scripts/run.py --tags "@smoke"` |
-| Browser visível | `python scripts/run.py --headed` |
-| Firefox | `python scripts/run.py --browser firefox` |
-| WebKit | `python scripts/run.py --browser webkit` |
-| Manter ParaBank ativo | `python scripts/run.py --keep-environment` |
-| Permitir bootstrap Docker | `python scripts/run.py --install-docker` |
-| Impedir instalação Docker | `python scripts/run.py --no-docker-install` |
-
----
-
-## 🧬 Estratégia de dados
-
-A massa é criada dinamicamente para evitar dependência entre execuções.
-
-```text
-Cenário
-  ↓
-Cliente exclusivo
-  ↓
-Pré-condições via backend
-  ↓
-Ação funcional pela UI
-  ↓
-Validação visual
-  ↓
-Validação de persistência / saldo / transação via API
-```
-
-Princípios utilizados:
-
-- username e SSN únicos;
-- contas exclusivas para transferência;
-- nenhum cenário depende da execução de outro;
-- nenhuma sessão de navegador é compartilhada;
-- preparação via API evita navegar pela UI apenas para montar pré-condição.
-
----
-
-## 🧱 Page Object Model
-
-Os Page Objects concentram:
-
-- seletores;
-- ações de interface;
-- esperas específicas da tela;
-- assertions visuais associadas à página.
-
-As steps do Behave ficam responsáveis por expressar o comportamento e coordenar Page Objects, dados e serviços.
-
-Isso reduz duplicação e evita espalhar detalhes de UI pelas features.
-
----
-
-## 📊 Allure Report personalizado
-
-O projeto utiliza **Allure Report 3** com o **Awesome plugin**.
-
-Configuração:
+Os wrappers `run_tests.bat` e `run_tests.sh` utilizam **Allure 3.17.0** explicitamente e geram o relatório com:
 
 ```text
 allurerc.yml
 ```
 
-O relatório foi personalizado com:
+A configuração aplica:
 
-- identidade visual e logo Topaz;
+- **Awesome Report**;
+- identidade visual Topaz;
 - tema escuro;
-- título próprio da entrega;
-- informações de projeto, ambiente e stack;
-- labels de `epic`, `feature`, browser, ambiente, layer e severity;
-- categorias específicas para timeout, falha funcional e falha de automação/infraestrutura;
-- ordenação inicial por status;
-- expansão automática apenas do contexto relevante em falhas;
-- metadata do ambiente de execução;
-- screenshot automático em falhas;
-- URL atual anexada em falhas;
-- erros do console do navegador anexados quando disponíveis.
+- nome personalizado do relatório;
+- variáveis de projeto e ambiente;
+- labels para navegação e filtros;
+- categorização de falhas;
+- expansão automática do contexto relevante de erro;
+- ordenação por status.
 
-A configuração é estática (`YAML`) para funcionar tanto com instalações globais do Allure CLI quanto no GitHub Actions, evitando dependência de um projeto Node.js apenas para gerar o relatório.
+Quando um step falha, são anexados automaticamente:
+
+- screenshot full-page;
+- URL atual;
+- erros relevantes do console do browser.
 
 Resultados brutos:
 
@@ -415,11 +410,16 @@ Resultados brutos:
 reports/allure-results
 ```
 
-Gerar o HTML manualmente:
+HTML gerado:
+
+```text
+reports/allure-report
+```
+
+Geração manual, utilizando exatamente a mesma configuração do runner e do CI:
 
 ```bash
-allure generate \
-  reports/allure-results \
+npx --yes allure@3.17.0 generate reports/allure-results \
   --config ./allurerc.yml \
   --output reports/allure-report
 ```
@@ -427,10 +427,8 @@ allure generate \
 Abrir o relatório:
 
 ```bash
-allure open reports/allure-report
+npx --yes allure@3.17.0 open reports/allure-report
 ```
-
-Os runners interativos também oferecem a geração do relatório ao final da execução.
 
 ---
 
@@ -442,104 +440,94 @@ Workflow:
 .github/workflows/e2e.yml
 ```
 
-### Pull Request → `main`
+### Pull Request para `main`
 
 ```text
-Checkout
-   ↓
+checkout
+  ↓
 Python 3.12
-   ↓
-Docker / Compose validation
-   ↓
-Dependencies
-   ↓
-Python compileall
-   ↓
+  ↓
+Docker / Compose
+  ↓
+dependências
+  ↓
+compileall
+  ↓
 Playwright Chromium
-   ↓
-ParaBank Docker + banco limpo
-   ↓
-Regressão completa
-   ↓
-Allure personalizado
-   ↓
-Quality Gate
+  ↓
+ParaBank local + banco limpo
+  ↓
+regressão completa
+  ↓
+Allure 3 personalizado
+  ↓
+quality gate
 ```
 
-A regressão completa em Chromium é o **quality gate** do Pull Request.
+A regressão completa em Chromium funciona como **quality gate** do PR.
 
-### Push → `main`
-
-Após merge, o pipeline executa:
+### Push em `main`
 
 ```text
-                ┌─ Full Regression / Chromium
-main ───────────┼─ Smoke / Firefox
-                └─ Smoke / WebKit
+                    ┌── Full Regression / Chromium
+merge em main ──────┼── Smoke / Firefox
+                    └── Smoke / WebKit
 ```
 
-Quando todos os gates ficam verdes, o relatório da regressão pode ser publicado em **GitHub Pages**, caso Pages esteja habilitado no repositório.
+Quando todos os gates passam, o relatório Allure pode ser publicado via GitHub Pages, se Pages estiver habilitado no repositório.
 
 ### Execução manual
 
-O `workflow_dispatch` permite escolher:
+`workflow_dispatch` permite escolher:
 
 - `full`;
 - `smoke`;
 - `login`;
 - `registration`;
 - `transfer`;
-
-E o browser:
-
 - Chromium;
 - Firefox;
 - WebKit.
 
-O pipeline não depende de secrets de terceiros.
+O pipeline não depende de secrets ou serviços externos para acessar o SUT.
 
 ---
 
-## 🛡️ Boas práticas aplicadas
+## ✅ Boas práticas aplicadas
 
-- ✅ testes independentes;
-- ✅ dados dinâmicos e exclusivos;
-- ✅ API-first para preparação de pré-condições;
-- ✅ UI focada no comportamento realmente testado;
-- ✅ POM para reduzir acoplamento com seletores;
-- ✅ `BrowserContext` isolado por cenário;
-- ✅ auto-wait do Playwright em vez de sleeps funcionais fixos;
-- ✅ assertions de backend após operações críticas;
-- ✅ validação de ausência de efeitos colaterais em cenários negativos;
-- ✅ ambiente limpo por execução;
-- ✅ teardown automático;
-- ✅ mensagens de erro diagnósticas;
-- ✅ evidências automáticas no Allure;
-- ✅ dependências principais versionadas;
-- ✅ CI reproduzindo a mesma arquitetura usada localmente;
-- ✅ cobertura orientada a risco e comportamento, não à quantidade de testes.
+- cenários independentes;
+- cobertura orientada a risco;
+- BDD focado em comportamento;
+- POM para abstração da interface;
+- API-first para pré-condições técnicas;
+- validação backend após operações críticas;
+- dados dinâmicos;
+- isolamento de sessão;
+- ambiente determinístico e descartável;
+- ausência de sleeps fixos para sincronização funcional;
+- auto-wait e assertions do Playwright;
+- falhas com mensagens diagnósticas;
+- evidências automáticas;
+- execução reproduzível local/CI;
+- regressão e smoke com responsabilidades distintas;
+- nenhum workaround dependente do ambiente público.
 
 ---
 
-## ✅ Validação final
+## 📈 Resultado de referência
 
-A regressão da versão final foi validada no GitHub Actions em Chromium com:
+Regressão completa validada no pipeline:
 
 ```text
 3 features passed
 24 scenarios passed
 117 steps passed
 0 failed
-0 skipped
 ```
-
-Além da regressão principal, o pipeline está preparado para validar o smoke em Firefox e WebKit após integração em `main`.
 
 ---
 
-## 👨‍💻 Autor
-
-**Fernando Ramos**  
-QA Automation / Software Quality
-
-Projeto desenvolvido como entrega técnica, com foco em arquitetura de automação, estratégia de testes, confiabilidade e manutenibilidade.
+<p align="center">
+  <strong>Topaz | ParaBank QA Automation</strong><br/>
+  Python · Playwright · Behave · Docker · Allure · GitHub Actions
+</p>
