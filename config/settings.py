@@ -1,35 +1,21 @@
 from typing import Literal
 
 from pydantic import model_validator
-from pydantic_settings import (
-    BaseSettings,
-    SettingsConfigDict,
-)
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    LOCAL_BASE_URL: str = (
-        "http://localhost:8080/parabank"
-    )
-
+    LOCAL_BASE_URL: str = "http://localhost:8080/parabank"
     LOCAL_STARTUP_TIMEOUT_SECONDS: float = 180.0
 
     HEADLESS: bool = True
-
-    BROWSER: Literal[
-        "chromium",
-        "firefox",
-        "webkit",
-    ] = "chromium"
+    BROWSER: Literal["chromium", "firefox", "webkit"] = "chromium"
 
     PW_TIMEOUT_MS: int = 10_000
-
     PW_NAVIGATION_TIMEOUT_MS: int = 15_000
-
     REQUEST_TIMEOUT_SECONDS: float = 30.0
 
     BLOCK_NONESSENTIAL_RESOURCES: bool = True
-
     UI_SCENARIO_DELAY_SECONDS: float = 0.0
 
     model_config = SettingsConfigDict(
@@ -45,56 +31,31 @@ class Settings(BaseSettings):
 
     @property
     def bank_api_url(self) -> str:
-        return (
-            f"{self.BASE_URL}"
-            "/services/bank"
-        )
-
-    @property
-    def BACKEND_TRANSPORT(self) -> str:
-        return "direct"
-
-    @property
-    def BROWSER_TRANSPORT(self) -> str:
-        return "direct"
+        return f"{self.BASE_URL}/services/bank"
 
     @model_validator(mode="after")
-    def validate_configuration(
-        self,
-    ) -> "Settings":
+    def validate_configuration(self) -> "Settings":
         if not self.LOCAL_BASE_URL.strip():
-            raise ValueError(
-                "LOCAL_BASE_URL cannot be empty."
-            )
+            raise ValueError("LOCAL_BASE_URL cannot be empty.")
 
         if self.LOCAL_STARTUP_TIMEOUT_SECONDS <= 0:
             raise ValueError(
-                "LOCAL_STARTUP_TIMEOUT_SECONDS "
-                "must be greater than zero."
+                "LOCAL_STARTUP_TIMEOUT_SECONDS must be greater than zero."
             )
 
         if self.PW_TIMEOUT_MS <= 0:
-            raise ValueError(
-                "PW_TIMEOUT_MS must be greater than zero."
-            )
+            raise ValueError("PW_TIMEOUT_MS must be greater than zero.")
 
         if self.PW_NAVIGATION_TIMEOUT_MS <= 0:
             raise ValueError(
-                "PW_NAVIGATION_TIMEOUT_MS "
-                "must be greater than zero."
+                "PW_NAVIGATION_TIMEOUT_MS must be greater than zero."
             )
 
         if self.REQUEST_TIMEOUT_SECONDS <= 0:
-            raise ValueError(
-                "REQUEST_TIMEOUT_SECONDS "
-                "must be greater than zero."
-            )
+            raise ValueError("REQUEST_TIMEOUT_SECONDS must be greater than zero.")
 
         if self.UI_SCENARIO_DELAY_SECONDS < 0:
-            raise ValueError(
-                "UI_SCENARIO_DELAY_SECONDS "
-                "cannot be negative."
-            )
+            raise ValueError("UI_SCENARIO_DELAY_SECONDS cannot be negative.")
 
         return self
 
