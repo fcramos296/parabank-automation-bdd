@@ -22,12 +22,7 @@ def _userdata_bool(context, name: str, default: bool) -> bool:
 
 
 def _handle_resource(route: Route) -> None:
-    resource_type = route.request.resource_type
-
-    if (
-        settings.BLOCK_NONESSENTIAL_RESOURCES
-        and resource_type in BLOCKED_RESOURCE_TYPES
-    ):
+    if route.request.resource_type in BLOCKED_RESOURCE_TYPES:
         route.abort()
         return
 
@@ -58,7 +53,9 @@ def before_scenario(context, scenario) -> None:
         viewport={"width": 1280, "height": 720}
     )
     context.browser_context.set_default_timeout(settings.PW_TIMEOUT_MS)
-    context.browser_context.route("**/*", _handle_resource)
+
+    if settings.BLOCK_NONESSENTIAL_RESOURCES:
+        context.browser_context.route("**/*", _handle_resource)
 
     context.page = context.browser_context.new_page()
     context.page.set_default_navigation_timeout(settings.PW_NAVIGATION_TIMEOUT_MS)
@@ -95,6 +92,10 @@ def after_scenario(context, scenario) -> None:
 
 
 def after_all(context) -> None:
+    api_client = getattr(context, "api_client", None)
+    if api_client:
+        api_client.close()
+
     browser = getattr(context, "browser", None)
     if browser:
         browser.close()
