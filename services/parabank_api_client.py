@@ -172,7 +172,9 @@ class ParabankApiClient:
             )
 
         if not accounts:
-            raise AssertionError(f"No accounts were returned for customer {customer_id}.")
+            raise AssertionError(
+                f"No accounts were returned for customer {customer_id}."
+            )
 
         return accounts
 
