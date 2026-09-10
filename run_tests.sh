@@ -3,32 +3,31 @@
 set -u
 set -o pipefail
 
-PROJECT_DIR="$(
-    cd "$(dirname "${BASH_SOURCE[0]}")" &&
-    pwd
-)"
-
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$PROJECT_DIR" || exit 1
 
+ALLURE_VERSION="3.17.0"
+ALLURE_CONFIG="allurerc.yml"
 ALLURE_RESULTS="reports/allure-results"
 ALLURE_REPORT="reports/allure-report"
 ALLURE_LOG="reports/allure-server.log"
 
 TEST_EXIT_CODE=0
 GENERATE_REPORT=true
-ALLURE_AVAILABLE=false
-ALLURE_MODE=""
+ALLURE_READY=false
 SCOPE_ARGS=()
 HEADED_ARGS=()
 BROWSER="chromium"
 PYTHON_CMD=""
+ALLURE_SCOPE="full"
 
 header() {
     clear 2>/dev/null || true
-
     echo "============================================================"
     echo
     echo "             PARABANK AUTOMATION BDD"
+    echo
+    echo "              TOPAZ - QA AUTOMATION"
     echo
     echo "        Playwright + Python + Behave + Docker"
     echo
@@ -41,42 +40,29 @@ pause_execution() {
     read -r -p "Pressione ENTER para continuar..."
 }
 
-python_supported() {
-    local candidate="$1"
+run_admin() {
+    if [[ "$(id -u)" -eq 0 ]]; then
+        "$@"
+    elif command -v sudo >/dev/null 2>&1; then
+        sudo "$@"
+    else
+        echo "[ERRO] A operacao exige root/sudo."
+        return 1
+    fi
+}
 
-    "$candidate" -c \
-        'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' \
-        >/dev/null 2>&1
+python_supported() {
+    "$1" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' >/dev/null 2>&1
 }
 
 find_python() {
     local candidate
-
     for candidate in python3 python; do
-        if command -v "$candidate" >/dev/null 2>&1 \
-            && python_supported "$candidate"; then
+        if command -v "$candidate" >/dev/null 2>&1 && python_supported "$candidate"; then
             PYTHON_CMD="$candidate"
             return 0
         fi
     done
-
-    return 1
-}
-
-run_admin() {
-    if [[ "$(id -u)" -eq 0 ]]; then
-        "$@"
-        return $?
-    fi
-
-    if command -v sudo >/dev/null 2>&1; then
-        sudo "$@"
-        return $?
-    fi
-
-    echo
-    echo "[ERRO] Esta operacao exige privilegios administrativos"
-    echo "e sudo nao foi encontrado."
     return 1
 }
 
@@ -85,152 +71,79 @@ refresh_homebrew() {
         eval "$(/opt/homebrew/bin/brew shellenv)"
         return 0
     fi
-
     if [[ -x /usr/local/bin/brew ]]; then
         eval "$(/usr/local/bin/brew shellenv)"
         return 0
     fi
-
     return 1
 }
 
 install_homebrew() {
-    if command -v brew >/dev/null 2>&1; then
-        return 0
-    fi
+    command -v brew >/dev/null 2>&1 && return 0
+    refresh_homebrew && return 0
 
-    if ! command -v curl >/dev/null 2>&1; then
+    command -v curl >/dev/null 2>&1 || {
         echo "[ERRO] curl nao foi encontrado no macOS."
         return 1
-    fi
+    }
 
-    echo
-    echo "[python] Homebrew nao foi encontrado."
-    echo "[python] Instalando Homebrew para preparar Python..."
-
-    /bin/bash -c \
-        "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" \
-        || return 1
-
+    echo "[setup] Instalando Homebrew..."
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || return 1
     refresh_homebrew
 }
 
-install_python_macos() {
-    install_homebrew || return 1
-
-    echo
-    echo "[python] Instalando Python via Homebrew..."
-
-    brew install python@3.12 || return 1
-
-    hash -r 2>/dev/null || true
-    find_python
-}
-
-install_python_linux() {
-    echo
-    echo "[python] Instalando Python 3, pip e suporte a venv..."
-
-    if command -v apt-get >/dev/null 2>&1; then
-        run_admin apt-get update || return 1
-        run_admin apt-get install -y \
-            python3 \
-            python3-venv \
-            python3-pip \
-            curl \
-            ca-certificates \
-            || return 1
-
-    elif command -v dnf >/dev/null 2>&1; then
-        run_admin dnf install -y \
-            python3 \
-            python3-pip \
-            curl \
-            ca-certificates \
-            || return 1
-
-    elif command -v yum >/dev/null 2>&1; then
-        run_admin yum install -y \
-            python3 \
-            python3-pip \
-            curl \
-            ca-certificates \
-            || return 1
-
-    elif command -v pacman >/dev/null 2>&1; then
-        run_admin pacman -S --noconfirm \
-            python \
-            python-pip \
-            curl \
-            ca-certificates \
-            || return 1
-
-    elif command -v zypper >/dev/null 2>&1; then
-        run_admin zypper \
-            --non-interactive \
-            install \
-            python3 \
-            python3-pip \
-            curl \
-            ca-certificates \
-            || return 1
-    else
-        echo
-        echo "[ERRO] Nenhum gerenciador de pacotes Linux suportado"
-        echo "foi encontrado para instalar Python automaticamente."
-        return 1
-    fi
-
-    hash -r 2>/dev/null || true
-
-    if ! find_python; then
-        echo
-        echo "[ERRO] O gerenciador instalou Python, mas a versao"
-        echo "disponivel nao atende ao requisito Python 3.10+."
-        return 1
-    fi
-
-    return 0
-}
-
 install_python() {
-    local system
-
-    system="$(uname -s)"
-
-    case "$system" in
+    case "$(uname -s)" in
         Darwin)
-            install_python_macos
+            install_homebrew || return 1
+            brew install python@3.12 || return 1
+            hash -r 2>/dev/null || true
             ;;
         Linux)
-            install_python_linux
+            if command -v apt-get >/dev/null 2>&1; then
+                run_admin apt-get update || return 1
+                run_admin apt-get install -y python3 python3-venv python3-pip curl ca-certificates || return 1
+            elif command -v dnf >/dev/null 2>&1; then
+                run_admin dnf install -y python3 python3-pip curl ca-certificates || return 1
+            elif command -v yum >/dev/null 2>&1; then
+                run_admin yum install -y python3 python3-pip curl ca-certificates || return 1
+            elif command -v pacman >/dev/null 2>&1; then
+                run_admin pacman -S --noconfirm python python-pip curl ca-certificates || return 1
+            elif command -v zypper >/dev/null 2>&1; then
+                run_admin zypper --non-interactive install python3 python3-pip curl ca-certificates || return 1
+            else
+                echo "[ERRO] Gerenciador de pacotes Linux nao suportado."
+                return 1
+            fi
+            hash -r 2>/dev/null || true
             ;;
         *)
-            echo
-            echo "[ERRO] Bootstrap automatico de Python nao suporta: $system"
+            echo "[ERRO] Sistema nao suportado pelo bootstrap de Python."
             return 1
             ;;
     esac
+
+    find_python
 }
 
 check_project() {
     echo "[CHECK] Validando estrutura do projeto..."
 
+    local path
     for path in \
-        "scripts/run.py" \
-        "scripts/configure_env.py" \
-        "requirements.txt" \
-        "features"; do
-
+        scripts/run.py \
+        scripts/configure_env.py \
+        requirements.txt \
+        features \
+        "$ALLURE_CONFIG" \
+        assets/topaz-logo.png; do
         if [[ ! -e "$path" ]]; then
-            echo
             echo "[ERRO] $path nao foi encontrado."
             return 1
         fi
     done
 
     echo "[OK] Estrutura principal encontrada."
-    return 0
 }
 
 check_python() {
@@ -242,55 +155,22 @@ check_python() {
         return 0
     fi
 
-    echo
     echo "[INFO] Python 3.10+ nao foi encontrado."
+    echo "O requirements.txt instala bibliotecas, mas nao o interpretador."
     echo
-    echo "O requirements.txt instala bibliotecas Python, mas nao"
-    echo "instala o proprio interpretador Python."
-    echo
-
-    read -r -p \
-        "Deseja instalar Python automaticamente? [S/n]: " \
-        answer
-
+    read -r -p "Deseja instalar Python automaticamente? [S/n]: " answer
     answer="${answer:-S}"
 
-    if [[ ! "$answer" =~ ^[Ss]$ ]]; then
-        echo
-        echo "[ERRO] Python e obrigatorio para executar o framework."
-        return 1
-    fi
-
+    [[ "$answer" =~ ^[Ss]$ ]] || return 1
     install_python || return 1
 
-    if ! find_python; then
-        echo
-        echo "[ERRO] Python foi instalado, mas nao foi localizado."
-        return 1
-    fi
-
     echo "[OK] $("$PYTHON_CMD" --version 2>&1)"
-    return 0
 }
 
 configure_env() {
     echo
     echo "[CHECK] Verificando configuracao do ambiente..."
-    echo
-
     "$PYTHON_CMD" scripts/configure_env.py
-
-    local exit_code=$?
-
-    if [[ "$exit_code" -ne 0 ]]; then
-        echo
-        echo "[ERRO] A configuracao do ambiente nao foi concluida."
-        return "$exit_code"
-    fi
-
-    echo
-    echo "[OK] Ambiente configurado."
-    return 0
 }
 
 select_scope() {
@@ -305,44 +185,18 @@ select_scope() {
         echo "  [4] Registro"
         echo "  [5] Transferencia"
         echo
-
-        read -r -p \
-            "Escolha [1-5] (padrao: 1): " \
-            choice
-
+        read -r -p "Escolha [1-5] (padrao: 1): " choice
         choice="${choice:-1}"
         SCOPE_ARGS=()
+        ALLURE_SCOPE="full"
 
         case "$choice" in
-            1)
-                SCOPE_DESCRIPTION="Suite completa"
-                return
-                ;;
-            2)
-                SCOPE_DESCRIPTION="Smoke Tests (@smoke)"
-                SCOPE_ARGS=(--tags "@smoke")
-                return
-                ;;
-            3)
-                SCOPE_DESCRIPTION="Login"
-                SCOPE_ARGS=(--scope login)
-                return
-                ;;
-            4)
-                SCOPE_DESCRIPTION="Registro"
-                SCOPE_ARGS=(--scope registration)
-                return
-                ;;
-            5)
-                SCOPE_DESCRIPTION="Transferencia"
-                SCOPE_ARGS=(--scope transfer)
-                return
-                ;;
-            *)
-                echo
-                echo "[AVISO] Opcao invalida."
-                echo
-                ;;
+            1) SCOPE_DESCRIPTION="Suite completa"; return ;;
+            2) SCOPE_DESCRIPTION="Smoke Tests (@smoke)"; SCOPE_ARGS=(--tags "@smoke"); ALLURE_SCOPE="smoke"; return ;;
+            3) SCOPE_DESCRIPTION="Login"; SCOPE_ARGS=(--scope login); ALLURE_SCOPE="login"; return ;;
+            4) SCOPE_DESCRIPTION="Registro"; SCOPE_ARGS=(--scope registration); ALLURE_SCOPE="registration"; return ;;
+            5) SCOPE_DESCRIPTION="Transferencia"; SCOPE_ARGS=(--scope transfer); ALLURE_SCOPE="transfer"; return ;;
+            *) echo "[AVISO] Opcao invalida." ;;
         esac
     done
 }
@@ -358,45 +212,21 @@ select_browser() {
         echo "  [2] Firefox"
         echo "  [3] WebKit"
         echo
-
-        read -r -p \
-            "Escolha [1-3] (padrao: 1): " \
-            choice
-
+        read -r -p "Escolha [1-3] (padrao: 1): " choice
         choice="${choice:-1}"
 
         case "$choice" in
-            1)
-                BROWSER="chromium"
-                return
-                ;;
-            2)
-                BROWSER="firefox"
-                return
-                ;;
-            3)
-                BROWSER="webkit"
-                return
-                ;;
-            *)
-                echo
-                echo "[AVISO] Opcao invalida."
-                ;;
+            1) BROWSER="chromium"; return ;;
+            2) BROWSER="firefox"; return ;;
+            3) BROWSER="webkit"; return ;;
+            *) echo "[AVISO] Opcao invalida." ;;
         esac
     done
 }
 
-select_execution_mode() {
+select_mode() {
     echo
-    echo "============================================================"
-    echo "MODO DE EXECUCAO"
-    echo "============================================================"
-    echo
-
-    read -r -p \
-        "Executar exibindo o navegador? [s/N]: " \
-        answer
-
+    read -r -p "Executar exibindo o navegador? [s/N]: " answer
     if [[ "$answer" =~ ^[Ss]$ ]]; then
         HEADED_ARGS=(--headed)
         MODE_DESCRIPTION="Headed - navegador visivel"
@@ -406,22 +236,18 @@ select_execution_mode() {
     fi
 }
 
-select_report_mode() {
+select_report() {
     echo
     echo "============================================================"
-    echo "RELATORIO ALLURE"
+    echo "RELATORIO ALLURE 3 - TOPAZ"
     echo "============================================================"
     echo
-
-    read -r -p \
-        "Deseja gerar o relatorio Allure ao final? [S/n]: " \
-        answer
-
+    read -r -p "Deseja gerar o relatorio Allure personalizado ao final? [S/n]: " answer
     answer="${answer:-S}"
 
     if [[ "$answer" =~ ^[Ss]$ ]]; then
         GENERATE_REPORT=true
-        REPORT_DESCRIPTION="Gerar relatorio Allure"
+        REPORT_DESCRIPTION="Allure 3 Awesome - Topaz"
     else
         GENERATE_REPORT=false
         REPORT_DESCRIPTION="Apenas allure-results"
@@ -429,270 +255,105 @@ select_report_mode() {
 }
 
 install_node() {
-    echo
-    echo "Node.js/npm nao foram encontrados."
-    echo
-
-    read -r -p \
-        "Deseja instalar Node.js automaticamente? [S/n]: " \
-        answer
-
+    echo "[setup] Node.js/npm nao foram encontrados."
+    read -r -p "Deseja instalar Node.js automaticamente para gerar o Allure? [S/n]: " answer
     answer="${answer:-S}"
+    [[ "$answer" =~ ^[Ss]$ ]] || return 1
 
-    if [[ ! "$answer" =~ ^[Ss]$ ]]; then
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        install_homebrew || return 1
+        brew install node || return 1
+    elif command -v apt-get >/dev/null 2>&1; then
+        run_admin apt-get update && run_admin apt-get install -y nodejs npm || return 1
+    elif command -v dnf >/dev/null 2>&1; then
+        run_admin dnf install -y nodejs npm || return 1
+    elif command -v yum >/dev/null 2>&1; then
+        run_admin yum install -y nodejs npm || return 1
+    elif command -v pacman >/dev/null 2>&1; then
+        run_admin pacman -S --noconfirm nodejs npm || return 1
+    elif command -v zypper >/dev/null 2>&1; then
+        run_admin zypper --non-interactive install nodejs npm || return 1
+    else
+        echo "[ERRO] Nao foi possivel instalar Node.js automaticamente."
         return 1
     fi
 
-    if command -v brew >/dev/null 2>&1; then
-        brew install node
-        return $?
-    fi
-
-    if command -v apt-get >/dev/null 2>&1; then
-        run_admin apt-get update &&
-            run_admin apt-get install -y nodejs npm
-        return $?
-    fi
-
-    if command -v dnf >/dev/null 2>&1; then
-        run_admin dnf install -y nodejs npm
-        return $?
-    fi
-
-    if command -v pacman >/dev/null 2>&1; then
-        run_admin pacman -S --noconfirm nodejs npm
-        return $?
-    fi
-
-    if command -v zypper >/dev/null 2>&1; then
-        run_admin zypper \
-            --non-interactive \
-            install \
-            nodejs \
-            npm
-        return $?
-    fi
-
-    echo
-    echo "[ERRO] Nenhum gerenciador suportado foi encontrado."
-    return 1
+    hash -r 2>/dev/null || true
 }
 
-ensure_node() {
-    if command -v node >/dev/null 2>&1 \
-        && command -v npm >/dev/null 2>&1; then
-        echo "[OK] Node.js $(node --version) encontrado."
-        return 0
-    fi
-
-    install_node
-}
-
-ensure_allure() {
+ensure_allure3() {
     echo
     echo "============================================================"
-    echo "VERIFICANDO ALLURE REPORT"
+    echo "PREPARANDO ALLURE 3"
     echo "============================================================"
     echo
 
-    ALLURE_AVAILABLE=false
-    ALLURE_MODE=""
-
-    if command -v allure >/dev/null 2>&1 \
-        && allure --version >/dev/null 2>&1; then
-        echo "[OK] Allure $(allure --version | head -n 1) encontrado."
-        ALLURE_AVAILABLE=true
-        ALLURE_MODE="direct"
-        return
+    if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+        install_node || return 1
     fi
 
-    echo "[INFO] Allure CLI nao esta instalado."
-    echo
-
-    read -r -p \
-        "Deseja instalar o Allure agora? [S/n]: " \
-        answer
-
-    answer="${answer:-S}"
-
-    if [[ ! "$answer" =~ ^[Ss]$ ]]; then
-        GENERATE_REPORT=false
-        return
+    if ! npx --yes "allure@$ALLURE_VERSION" --version >/dev/null 2>&1; then
+        echo "[ERRO] Nao foi possivel preparar Allure $ALLURE_VERSION."
+        return 1
     fi
 
-    if ! ensure_node; then
-        GENERATE_REPORT=false
-        return
-    fi
-
-    echo
-    echo "[ALLURE] Instalando Allure Report..."
-    echo
-
-    if npm install -g allure; then
-        hash -r 2>/dev/null || true
-
-        if command -v allure >/dev/null 2>&1; then
-            ALLURE_AVAILABLE=true
-            ALLURE_MODE="direct"
-            return
-        fi
-    fi
-
-    if npx --yes allure --version >/dev/null 2>&1; then
-        ALLURE_AVAILABLE=true
-        ALLURE_MODE="npx"
-        return
-    fi
-
-    echo
-    echo "[AVISO] Nao foi possivel preparar o Allure."
-    GENERATE_REPORT=false
-}
-
-run_allure() {
-    if [[ "$ALLURE_MODE" == "npx" ]]; then
-        npx --yes allure "$@"
-    else
-        allure "$@"
-    fi
-}
-
-open_allure_report() {
-    echo
-    echo "[ALLURE] Abrindo relatorio..."
-    echo
-
-    mkdir -p "$(dirname "$ALLURE_LOG")"
-
-    if [[ "$ALLURE_MODE" == "npx" ]]; then
-        nohup \
-            npx \
-            --yes \
-            allure \
-            open \
-            "$ALLURE_REPORT" \
-            >"$ALLURE_LOG" \
-            2>&1 &
-    else
-        nohup \
-            allure \
-            open \
-            "$ALLURE_REPORT" \
-            >"$ALLURE_LOG" \
-            2>&1 &
-    fi
-
-    echo "[OK] Servidor Allure iniciado."
+    echo "[OK] Allure $(npx --yes "allure@$ALLURE_VERSION" --version | head -n 1) pronto."
+    ALLURE_READY=true
 }
 
 generate_allure_report() {
     echo
     echo "============================================================"
-    echo "RELATORIO ALLURE"
+    echo "RELATORIO ALLURE 3 - TOPAZ"
     echo "============================================================"
     echo
 
-    if [[ ! -d "$ALLURE_RESULTS" ]]; then
-        echo "[AVISO] Resultados Allure nao encontrados."
-        return
-    fi
-
-    if [[ "$GENERATE_REPORT" != true ]]; then
-        echo "[INFO] Geracao do HTML nao foi solicitada."
-        return
-    fi
-
-    if [[ "$ALLURE_AVAILABLE" != true ]]; then
-        echo "[AVISO] Allure CLI nao esta disponivel."
-        return
-    fi
+    [[ -d "$ALLURE_RESULTS" ]] || { echo "[AVISO] Resultados Allure nao encontrados."; return; }
+    [[ "$GENERATE_REPORT" == true ]] || { echo "[INFO] Geracao do HTML nao foi solicitada."; return; }
+    [[ "$ALLURE_READY" == true ]] || { echo "[AVISO] Allure 3 nao esta disponivel."; return; }
 
     rm -rf "$ALLURE_REPORT"
+    export ALLURE_SCOPE
+    export ALLURE_BROWSER="$BROWSER"
 
-    echo "[ALLURE] Gerando relatorio HTML..."
+    echo "[ALLURE] Gerando relatorio personalizado..."
+    echo "[ALLURE] Config....: $ALLURE_CONFIG"
+    echo "[ALLURE] Tema......: Topaz / Awesome / dark"
+    echo "[ALLURE] Escopo....: $ALLURE_SCOPE"
+    echo "[ALLURE] Browser...: $ALLURE_BROWSER"
+    echo
 
-    if ! run_allure \
-        generate \
-        "$ALLURE_RESULTS" \
-        -o "$ALLURE_REPORT"; then
-        echo
-        echo "[ERRO] Nao foi possivel gerar o relatorio."
+    if ! npx --yes "allure@$ALLURE_VERSION" generate "$ALLURE_RESULTS" --config "./$ALLURE_CONFIG" --output "$ALLURE_REPORT"; then
+        echo "[ERRO] Nao foi possivel gerar o relatorio personalizado."
         return
     fi
 
-    echo
-    echo "[OK] Relatorio Allure gerado: $ALLURE_REPORT"
-    echo
+    [[ -f "$ALLURE_REPORT/index.html" ]] || { echo "[ERRO] index.html do Allure nao foi encontrado."; return; }
 
-    read -r -p \
-        "Deseja abrir o relatorio Allure agora? [S/n]: " \
-        answer
-
+    echo "[OK] Relatorio Topaz gerado: $ALLURE_REPORT"
+    echo
+    read -r -p "Deseja abrir o relatorio Allure agora? [S/n]: " answer
     answer="${answer:-S}"
 
     if [[ "$answer" =~ ^[Ss]$ ]]; then
-        open_allure_report
+        mkdir -p "$(dirname "$ALLURE_LOG")"
+        nohup npx --yes "allure@$ALLURE_VERSION" open "$ALLURE_REPORT" >"$ALLURE_LOG" 2>&1 &
+        echo "[OK] Servidor Allure iniciado."
     fi
-}
-
-show_summary() {
-    header
-
-    echo "RESUMO DA EXECUCAO"
-    echo
-    echo "  Escopo......: $SCOPE_DESCRIPTION"
-    echo "  Navegador...: $BROWSER"
-    echo "  Modo........: $MODE_DESCRIPTION"
-    echo "  Relatorio...: $REPORT_DESCRIPTION"
-    echo
-
-    read -r -p \
-        "Deseja iniciar a execucao? [S/n]: " \
-        answer
-
-    answer="${answer:-S}"
-
-    [[ "$answer" =~ ^[Ss]$ ]]
 }
 
 execute_tests() {
-    header
-
-    echo "INICIANDO TESTES"
-    echo
-
-    local run_args=(
-        scripts/run.py
-        --browser
-        "$BROWSER"
-    )
-
-    if [[ ${#SCOPE_ARGS[@]} -gt 0 ]]; then
-        run_args+=("${SCOPE_ARGS[@]}")
-    fi
-
-    if [[ ${#HEADED_ARGS[@]} -gt 0 ]]; then
-        run_args+=("${HEADED_ARGS[@]}")
-    fi
-
-    echo "Configuracao:"
-    echo
-    echo "  Escopo....: $SCOPE_DESCRIPTION"
-    echo "  Browser...: $BROWSER"
-    echo "  Modo......: $MODE_DESCRIPTION"
-    echo
+    local run_args=(scripts/run.py --browser "$BROWSER")
+    run_args+=("${SCOPE_ARGS[@]}")
+    run_args+=("${HEADED_ARGS[@]}")
 
     "$PYTHON_CMD" "${run_args[@]}"
     TEST_EXIT_CODE=$?
 
-    echo
-
     if [[ "$TEST_EXIT_CODE" -eq 0 ]]; then
         echo "[OK] Execucao concluida com sucesso."
     else
-        echo "[ATENCAO] Os testes terminaram com falhas ou erros."
-        echo "Codigo de saida: $TEST_EXIT_CODE"
+        echo "[ATENCAO] Execucao terminou com falhas ou erros: $TEST_EXIT_CODE"
     fi
 
     generate_allure_report
@@ -700,85 +361,54 @@ execute_tests() {
 
 main() {
     header
-
-    echo "Este assistente prepara e executa os testes automatizados"
-    echo "do ParaBank em um ambiente local Docker."
-    echo
-    echo "Em uma maquina nova ele pode preparar Python, Docker,"
-    echo "Compose, Playwright e o proprio ParaBank."
-    echo
-    echo "Alteracoes de sistema podem solicitar sudo ou confirmacao."
-
+    echo "Este assistente prepara e executa o ParaBank local em Docker."
+    echo "O relatorio utiliza Allure 3 Awesome com identidade visual Topaz."
     pause_execution
 
     header
-
     check_project || exit 1
     check_python || exit 1
     configure_env || exit 1
 
     if [[ "$#" -gt 0 ]]; then
-        echo
-        echo "[INFO] Argumentos detectados. Executando scripts/run.py diretamente."
-        echo
         "$PYTHON_CMD" scripts/run.py "$@"
         exit $?
     fi
 
     while true; do
         header
-
         select_scope
         select_browser
-        select_execution_mode
-        select_report_mode
+        select_mode
+        select_report
 
-        if ! show_summary; then
-            echo
-            echo "Execucao cancelada."
-            exit 0
-        fi
+        echo
+        echo "Resumo: $SCOPE_DESCRIPTION | $BROWSER | $MODE_DESCRIPTION | $REPORT_DESCRIPTION"
+        echo
+        read -r -p "Deseja iniciar a execucao? [S/n]: " answer
+        answer="${answer:-S}"
+        [[ "$answer" =~ ^[Ss]$ ]] || exit 0
 
         if [[ "$GENERATE_REPORT" == true ]]; then
-            ensure_allure
+            ensure_allure3 || GENERATE_REPORT=false
         fi
 
         execute_tests
 
         echo
         echo "============================================================"
-        echo "RESULTADO FINAL"
-        echo "============================================================"
-        echo
-
         if [[ "$TEST_EXIT_CODE" -eq 0 ]]; then
             echo "Status dos testes: SUCESSO"
         else
             echo "Status dos testes: FALHA / ERRO"
         fi
-
-        echo
-        echo "Resultados Allure: $ALLURE_RESULTS"
-
-        if [[ -d "$ALLURE_REPORT" ]]; then
-            echo "Relatorio HTML...: $ALLURE_REPORT"
-        fi
-
+        [[ -f "$ALLURE_REPORT/index.html" ]] && echo "Relatorio HTML: $ALLURE_REPORT"
+        echo "============================================================"
         echo
 
-        read -r -p \
-            "Deseja realizar uma nova execucao? [s/N]: " \
-            again
-
-        if [[ ! "$again" =~ ^[Ss]$ ]]; then
-            break
-        fi
+        read -r -p "Deseja realizar uma nova execucao? [s/N]: " again
+        [[ "$again" =~ ^[Ss]$ ]] || exit "$TEST_EXIT_CODE"
     done
-
-    echo
-    echo "Execucao finalizada."
-
-    exit "$TEST_EXIT_CODE"
 }
 
 main "$@"
