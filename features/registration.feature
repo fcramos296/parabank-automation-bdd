@@ -14,11 +14,21 @@ Funcionalidade: Registro de Usuário
     Quando preencho o formulário de cadastro com dados dinâmicos válidos
     E submeto o formulário de registro
     Então devo visualizar a mensagem de boas-vindas do usuário registrado
+    E os dados do novo cliente devem estar persistidos corretamente
+    E o cliente deve possuir uma conta corrente inicial com saldo "515.50"
 
   Cenário: Cadastro com sucesso sem informar o telefone opcional
     Quando preencho o formulário de cadastro com dados válidos sem informar telefone
     E submeto o formulário de registro
     Então devo visualizar a mensagem de boas-vindas do usuário registrado
+    E os dados do novo cliente devem estar persistidos corretamente
+    E o telefone persistido deve permanecer vazio
+
+  Cenário: Cadastro aceita credenciais no limite máximo suportado
+    Quando preencho o cadastro com username e senha de 20 caracteres
+    E submeto o formulário de registro
+    Então devo visualizar a mensagem de boas-vindas do usuário registrado
+    E os dados do novo cliente devem estar persistidos corretamente
 
   Cenário: Tentativa de cadastro sem preencher os campos obrigatórios
     Quando submeto o formulário de registro
