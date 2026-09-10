@@ -26,20 +26,14 @@ def ensure_environment() -> None:
         return
 
     if not ENV_EXAMPLE_FILE.exists():
-        raise FileNotFoundError(
-            ".env.example não foi encontrado."
-        )
+        raise FileNotFoundError(".env.example não foi encontrado.")
 
     ENV_FILE.write_text(
-        ENV_EXAMPLE_FILE.read_text(
-            encoding="utf-8"
-        ),
+        ENV_EXAMPLE_FILE.read_text(encoding="utf-8"),
         encoding="utf-8",
     )
 
-    print(
-        "[env] Arquivo .env criado a partir de .env.example."
-    )
+    print("[env] Arquivo .env criado a partir de .env.example.")
 
 
 def main() -> int:
@@ -47,13 +41,9 @@ def main() -> int:
         ensure_environment()
         return 0
     except Exception as exc:
-        print(
-            f"[ERRO] Configuração do ambiente: {exc}"
-        )
+        print(f"[ERRO] Configuração do ambiente: {exc}")
         return 1
 
 
 if __name__ == "__main__":
-    raise SystemExit(
-        main()
-    )
+    raise SystemExit(main())

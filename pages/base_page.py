@@ -18,10 +18,7 @@ class BasePage:
         self,
         path: str = "",
     ) -> None:
-        url = (
-            f"{settings.BASE_URL.rstrip('/')}/"
-            f"{path.lstrip('/')}"
-        )
+        url = f"{settings.BASE_URL.rstrip('/')}/{path.lstrip('/')}"
 
         self.page.goto(
             url,

@@ -54,8 +54,7 @@ def _transaction_ids(transactions: list[dict[str, Any]]) -> set[int]:
             ids.add(int(transaction["id"]))
         except (KeyError, TypeError, ValueError) as exc:
             raise AssertionError(
-                "Unexpected transaction payload without a valid id: "
-                f"{transaction!r}"
+                f"Unexpected transaction payload without a valid id: {transaction!r}"
             ) from exc
 
     return ids
@@ -306,8 +305,7 @@ def step_transfer_funds(context, amount: str) -> None:
 
 
 @when(
-    'realizo a transferência da quantia de "{amount}" '
-    "da segunda conta para a primeira"
+    'realizo a transferência da quantia de "{amount}" da segunda conta para a primeira'
 )
 def step_transfer_reverse_direction(context, amount: str) -> None:
     _execute_transfer(

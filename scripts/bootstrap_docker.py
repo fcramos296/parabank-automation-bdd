@@ -71,11 +71,7 @@ def _succeeds(
 
 def _prepend_path(path: Path) -> None:
     if path.exists():
-        os.environ["PATH"] = (
-            str(path)
-            + os.pathsep
-            + os.environ.get("PATH", "")
-        )
+        os.environ["PATH"] = str(path) + os.pathsep + os.environ.get("PATH", "")
 
 
 def _refresh_docker_path() -> None:
@@ -104,9 +100,11 @@ def _allowed(
         return False
 
     while True:
-        answer = input(
-            f"\nDeseja preparar {component} para {system} agora? [S/n]: "
-        ).strip().lower()
+        answer = (
+            input(f"\nDeseja preparar {component} para {system} agora? [S/n]: ")
+            .strip()
+            .lower()
+        )
 
         if answer in {"", "s", "sim", "y", "yes"}:
             return True
@@ -179,8 +177,7 @@ def _windows_elevated(
 ) -> None:
     file_name = executable.replace("'", "''")
     args = ", ".join(
-        f"'{argument.replace(chr(39), chr(39) * 2)}'"
-        for argument in arguments
+        f"'{argument.replace(chr(39), chr(39) * 2)}'" for argument in arguments
     )
     script = (
         "$p=Start-Process "
@@ -217,11 +214,7 @@ def _ensure_windows_wsl(policy: DockerInstallPolicy) -> None:
         and version >= MINIMUM_WSL_VERSION
         and _windows_wsl_status_ok()
     ):
-        print(
-            "[wsl] WSL "
-            + ".".join(str(part) for part in version)
-            + " disponível."
-        )
+        print("[wsl] WSL " + ".".join(str(part) for part in version) + " disponível.")
         return
 
     if not _allowed(
@@ -229,14 +222,10 @@ def _ensure_windows_wsl(policy: DockerInstallPolicy) -> None:
         "WSL 2 / Virtual Machine Platform",
         "Windows",
     ):
-        raise RuntimeError(
-            "WSL 2 não está pronto para o Docker Desktop."
-        )
+        raise RuntimeError("WSL 2 não está pronto para o Docker Desktop.")
 
     if version is None or not _windows_wsl_status_ok():
-        print(
-            "[wsl] Habilitando WSL 2 e Virtual Machine Platform..."
-        )
+        print("[wsl] Habilitando WSL 2 e Virtual Machine Platform...")
         _windows_elevated(
             "wsl.exe",
             ["--install", "--no-distribution"],
@@ -263,22 +252,14 @@ def _ensure_windows_wsl(policy: DockerInstallPolicy) -> None:
 
     version = _windows_wsl_version()
 
-    if (
-        version is None
-        or version < MINIMUM_WSL_VERSION
-        or not _windows_wsl_status_ok()
-    ):
+    if version is None or version < MINIMUM_WSL_VERSION or not _windows_wsl_status_ok():
         raise RuntimeError(
             "WSL/Virtual Machine Platform foram preparados, mas o Windows "
             "precisa concluir a ativação. Reinicie a máquina e execute o "
             "mesmo comando novamente."
         )
 
-    print(
-        "[wsl] WSL "
-        + ".".join(str(part) for part in version)
-        + " pronto."
-    )
+    print("[wsl] WSL " + ".".join(str(part) for part in version) + " pronto.")
 
 
 def _install_windows() -> None:
@@ -310,9 +291,7 @@ def _mac_admin_prefix() -> list[str]:
     if shutil.which("sudo"):
         return ["sudo"]
 
-    raise RuntimeError(
-        "A instalação no macOS exige privilégios administrativos."
-    )
+    raise RuntimeError("A instalação no macOS exige privilégios administrativos.")
 
 
 def _install_macos() -> None:
@@ -326,19 +305,12 @@ def _install_macos() -> None:
         raise RuntimeError("curl não foi encontrado no macOS.")
 
     architecture = (
-        "arm64"
-        if platform.machine().lower() in {"arm64", "aarch64"}
-        else "amd64"
+        "arm64" if platform.machine().lower() in {"arm64", "aarch64"} else "amd64"
     )
-    url = (
-        "https://desktop.docker.com/mac/main/"
-        f"{architecture}/Docker.dmg"
-    )
+    url = f"https://desktop.docker.com/mac/main/{architecture}/Docker.dmg"
     prefix = _mac_admin_prefix()
 
-    with tempfile.TemporaryDirectory(
-        prefix="parabank-docker-mac-"
-    ) as directory:
+    with tempfile.TemporaryDirectory(prefix="parabank-docker-mac-") as directory:
         dmg = Path(directory) / "Docker.dmg"
 
         print("[docker] Baixando Docker Desktop oficial...")
@@ -349,10 +321,7 @@ def _install_macos() -> None:
             _run(
                 [
                     *prefix,
-                    (
-                        "/Volumes/Docker/Docker.app/"
-                        "Contents/MacOS/install"
-                    ),
+                    ("/Volumes/Docker/Docker.app/Contents/MacOS/install"),
                     "--user",
                     getpass.getuser(),
                 ]
@@ -378,9 +347,7 @@ def _linux_admin_prefix() -> list[str]:
     if shutil.which("sudo"):
         return ["sudo"]
 
-    raise RuntimeError(
-        "A operação exige root/sudo e sudo não foi encontrado."
-    )
+    raise RuntimeError("A operação exige root/sudo e sudo não foi encontrado.")
 
 
 def _ensure_linux_curl() -> None:
@@ -456,14 +423,9 @@ def _install_linux() -> None:
     _ensure_linux_curl()
     prefix = _linux_admin_prefix()
 
-    print(
-        "[docker] Instalando Docker Engine pelo bootstrap oficial "
-        "get.docker.com..."
-    )
+    print("[docker] Instalando Docker Engine pelo bootstrap oficial get.docker.com...")
 
-    with tempfile.TemporaryDirectory(
-        prefix="parabank-docker-"
-    ) as directory:
+    with tempfile.TemporaryDirectory(prefix="parabank-docker-") as directory:
         installer = Path(directory) / "get-docker.sh"
         _run(
             [
@@ -511,9 +473,7 @@ def _start_windows() -> None:
             )
             return
 
-    raise RuntimeError(
-        "Docker Desktop foi instalado, mas não pôde ser iniciado."
-    )
+    raise RuntimeError("Docker Desktop foi instalado, mas não pôde ser iniciado.")
 
 
 def _start_macos() -> None:
@@ -620,15 +580,11 @@ def _ensure_compose(
     docker_command: Sequence[str],
     system: str,
 ) -> None:
-    if _succeeds(
-        [*docker_command, "compose", "version"]
-    ):
+    if _succeeds([*docker_command, "compose", "version"]):
         return
 
     if system != "Linux":
-        raise RuntimeError(
-            "Docker Compose não está disponível no Docker Desktop."
-        )
+        raise RuntimeError("Docker Compose não está disponível no Docker Desktop.")
 
     prefix = _linux_admin_prefix()
     print("[docker] Instalando Docker Compose plugin...")
@@ -669,12 +625,8 @@ def _ensure_compose(
             "Compose está ausente e o gerenciador Linux não é suportado."
         )
 
-    if not _succeeds(
-        [*docker_command, "compose", "version"]
-    ):
-        raise RuntimeError(
-            "Docker Compose plugin continua indisponível."
-        )
+    if not _succeeds([*docker_command, "compose", "version"]):
+        raise RuntimeError("Docker Compose plugin continua indisponível.")
 
 
 def _print_versions(
@@ -708,9 +660,7 @@ def ensure_docker(
     }
 
     if system not in labels:
-        raise RuntimeError(
-            f"Sistema operacional não suportado: {system}."
-        )
+        raise RuntimeError(f"Sistema operacional não suportado: {system}.")
 
     _refresh_docker_path()
     docker_command = _resolve_running(system)
@@ -764,14 +714,10 @@ def ensure_docker(
                 "Conclua qualquer configuração, permissão ou aceite "
                 "de licença solicitado pelo Docker Desktop."
             ),
-            "Linux": (
-                "Verifique o serviço docker e as permissões do usuário."
-            ),
+            "Linux": ("Verifique o serviço docker e as permissões do usuário."),
         }[system]
 
-        raise RuntimeError(
-            "Docker não ficou disponível. " + detail
-        )
+        raise RuntimeError("Docker não ficou disponível. " + detail)
 
     _ensure_compose(docker_command, system)
     return _print_versions(docker_command)

@@ -11,12 +11,7 @@ from pathlib import Path
 from typing import Sequence
 
 
-PROJECT_ROOT = (
-    Path(__file__)
-    .resolve()
-    .parent
-    .parent
-)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(
@@ -35,13 +30,9 @@ from parabank_env import (
 
 VENV_DIR = PROJECT_ROOT / ".venv"
 REQUIREMENTS_FILE = PROJECT_ROOT / "requirements.txt"
-REQUIREMENTS_HASH_FILE = (
-    VENV_DIR / ".requirements.sha256"
-)
+REQUIREMENTS_HASH_FILE = VENV_DIR / ".requirements.sha256"
 REPORTS_DIR = PROJECT_ROOT / "reports"
-ALLURE_RESULTS_DIR = (
-    REPORTS_DIR / "allure-results"
-)
+ALLURE_RESULTS_DIR = REPORTS_DIR / "allure-results"
 
 SUPPORTED_BROWSERS = (
     "chromium",
@@ -51,16 +42,8 @@ SUPPORTED_BROWSERS = (
 
 FEATURE_SCOPES = {
     "login": PROJECT_ROOT / "features" / "login.feature",
-    "registration": (
-        PROJECT_ROOT
-        / "features"
-        / "registration.feature"
-    ),
-    "transfer": (
-        PROJECT_ROOT
-        / "features"
-        / "transfer.feature"
-    ),
+    "registration": (PROJECT_ROOT / "features" / "registration.feature"),
+    "transfer": (PROJECT_ROOT / "features" / "transfer.feature"),
 }
 
 MINIMUM_PYTHON = (
@@ -73,45 +56,32 @@ def parse_args(
     argv: Sequence[str] | None = None,
 ) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description=(
-            "ParaBank local Docker automation runner."
-        ),
-        formatter_class=(
-            argparse.ArgumentDefaultsHelpFormatter
-        ),
+        description=("ParaBank local Docker automation runner."),
+        formatter_class=(argparse.ArgumentDefaultsHelpFormatter),
     )
 
     parser.add_argument(
         "--scope",
         choices=tuple(FEATURE_SCOPES),
-        help=(
-            "Executa apenas uma feature específica."
-        ),
+        help=("Executa apenas uma feature específica."),
     )
 
     parser.add_argument(
         "--tags",
-        help=(
-            "Filtro de tags do Behave. "
-            "Exemplo: --tags '@smoke'"
-        ),
+        help=("Filtro de tags do Behave. Exemplo: --tags '@smoke'"),
     )
 
     parser.add_argument(
         "--browser",
         choices=SUPPORTED_BROWSERS,
         default="chromium",
-        help=(
-            "Browser utilizado pelo Playwright."
-        ),
+        help=("Browser utilizado pelo Playwright."),
     )
 
     parser.add_argument(
         "--headed",
         action="store_true",
-        help=(
-            "Executa com o navegador visível."
-        ),
+        help=("Executa com o navegador visível."),
     )
 
     parser.add_argument(
@@ -128,8 +98,7 @@ def parse_args(
         "--keep-environment",
         action="store_true",
         help=(
-            "Mantém o container ParaBank ativo após "
-            "a execução para inspeção manual."
+            "Mantém o container ParaBank ativo após a execução para inspeção manual."
         ),
     )
 
@@ -161,10 +130,7 @@ def parse_args(
 
 def validate_python_version() -> None:
     if sys.version_info < MINIMUM_PYTHON:
-        expected = ".".join(
-            str(part)
-            for part in MINIMUM_PYTHON
-        )
+        expected = ".".join(str(part) for part in MINIMUM_PYTHON)
 
         current = (
             f"{sys.version_info.major}."
@@ -193,41 +159,23 @@ def docker_install_policy(
 
 def venv_python() -> Path:
     if os.name == "nt":
-        return (
-            VENV_DIR
-            / "Scripts"
-            / "python.exe"
-        )
+        return VENV_DIR / "Scripts" / "python.exe"
 
-    return (
-        VENV_DIR
-        / "bin"
-        / "python"
-    )
+    return VENV_DIR / "bin" / "python"
 
 
 def create_virtualenv() -> None:
     python_path = venv_python()
 
-    if (
-        VENV_DIR.exists()
-        and python_path.exists()
-    ):
-        print(
-            "[setup] Ambiente virtual .venv já existe."
-        )
+    if VENV_DIR.exists() and python_path.exists():
+        print("[setup] Ambiente virtual .venv já existe.")
         return
 
     if VENV_DIR.exists():
-        print(
-            "[setup] .venv incompleta encontrada; "
-            "recriando..."
-        )
+        print("[setup] .venv incompleta encontrada; recriando...")
         shutil.rmtree(VENV_DIR)
 
-    print(
-        "[setup] Criando ambiente virtual .venv..."
-    )
+    print("[setup] Criando ambiente virtual .venv...")
 
     builder = venv.EnvBuilder(
         with_pip=True,
@@ -239,13 +187,10 @@ def create_virtualenv() -> None:
 
     if not python_path.exists():
         raise RuntimeError(
-            "O ambiente virtual foi criado, mas o "
-            "executável Python não foi encontrado."
+            "O ambiente virtual foi criado, mas o executável Python não foi encontrado."
         )
 
-    print(
-        "[setup] Ambiente virtual criado."
-    )
+    print("[setup] Ambiente virtual criado.")
 
 
 def file_sha256(
@@ -265,22 +210,14 @@ def file_sha256(
 
 def requirements_changed() -> bool:
     if not REQUIREMENTS_FILE.exists():
-        raise FileNotFoundError(
-            "requirements.txt não foi encontrado."
-        )
+        raise FileNotFoundError("requirements.txt não foi encontrado.")
 
     if not REQUIREMENTS_HASH_FILE.exists():
         return True
 
-    current_hash = file_sha256(
-        REQUIREMENTS_FILE
-    )
+    current_hash = file_sha256(REQUIREMENTS_FILE)
 
-    stored_hash = (
-        REQUIREMENTS_HASH_FILE
-        .read_text(encoding="utf-8")
-        .strip()
-    )
+    stored_hash = REQUIREMENTS_HASH_FILE.read_text(encoding="utf-8").strip()
 
     return current_hash != stored_hash
 
@@ -298,10 +235,7 @@ def run_command(
     cwd: Path = PROJECT_ROOT,
     check: bool = True,
 ) -> subprocess.CompletedProcess:
-    normalized = [
-        str(item)
-        for item in command
-    ]
+    normalized = [str(item) for item in command]
 
     return subprocess.run(
         normalized,
@@ -314,14 +248,10 @@ def install_dependencies() -> None:
     python_path = venv_python()
 
     if not requirements_changed():
-        print(
-            "[setup] Dependências já estão atualizadas."
-        )
+        print("[setup] Dependências já estão atualizadas.")
         return
 
-    print(
-        "[setup] Instalando/atualizando dependências..."
-    )
+    print("[setup] Instalando/atualizando dependências...")
 
     run_command(
         [
@@ -347,18 +277,13 @@ def install_dependencies() -> None:
 
     save_requirements_hash()
 
-    print(
-        "[setup] Dependências instaladas."
-    )
+    print("[setup] Dependências instaladas.")
 
 
 def ensure_playwright_browser(
     browser: str,
 ) -> None:
-    print(
-        "[setup] Ensuring Playwright browser is installed: "
-        f"{browser}"
-    )
+    print(f"[setup] Ensuring Playwright browser is installed: {browser}")
 
     run_command(
         [
@@ -386,9 +311,7 @@ def prepare_allure_results() -> None:
     )
 
     if ALLURE_RESULTS_DIR.exists():
-        print(
-            "[report] Limpando resultados Allure anteriores..."
-        )
+        print("[report] Limpando resultados Allure anteriores...")
         shutil.rmtree(ALLURE_RESULTS_DIR)
 
     ALLURE_RESULTS_DIR.mkdir(
@@ -406,9 +329,7 @@ def resolve_runner_python(
     python_path = venv_python()
 
     if not python_path.exists():
-        raise RuntimeError(
-            ".venv Python não foi encontrado."
-        )
+        raise RuntimeError(".venv Python não foi encontrado.")
 
     return python_path
 
@@ -432,17 +353,10 @@ def build_behave_command(
 
         if not feature_path.exists():
             raise FileNotFoundError(
-                "Feature não encontrada para o escopo "
-                f"'{scope}': {feature_path}"
+                f"Feature não encontrada para o escopo '{scope}': {feature_path}"
             )
 
-        command.append(
-            str(
-                feature_path.relative_to(
-                    PROJECT_ROOT
-                )
-            )
-        )
+        command.append(str(feature_path.relative_to(PROJECT_ROOT)))
 
     if tags:
         command.extend(
@@ -455,11 +369,7 @@ def build_behave_command(
     command.extend(
         [
             "-D",
-            (
-                "headless=false"
-                if headed
-                else "headless=true"
-            ),
+            ("headless=false" if headed else "headless=true"),
             "-D",
             f"browser={browser}",
         ]
@@ -472,9 +382,7 @@ def format_command(
     command: Sequence[str],
 ) -> str:
     if os.name == "nt":
-        return subprocess.list2cmdline(
-            list(command)
-        )
+        return subprocess.list2cmdline(list(command))
 
     import shlex
 
@@ -497,10 +405,7 @@ def run_behave(
         headed=headed,
     )
 
-    print(
-        "[run] "
-        + format_command(command)
-    )
+    print("[run] " + format_command(command))
 
     completed = subprocess.run(
         command,
@@ -514,17 +419,9 @@ def run_behave(
 def print_execution_summary(
     args: argparse.Namespace,
 ) -> None:
-    scope = (
-        args.scope
-        if args.scope
-        else "suite completa"
-    )
+    scope = args.scope if args.scope else "suite completa"
 
-    execution_mode = (
-        "headed"
-        if args.headed
-        else "headless"
-    )
+    execution_mode = "headed" if args.headed else "headless"
 
     policy = docker_install_policy(args)
 
@@ -551,11 +448,7 @@ def print_execution_summary(
     print(f"Docker........: {docker_setup}")
     print(
         "Setup Python..: "
-        + (
-            "ignorado (--skip-setup)"
-            if args.skip_setup
-            else "automático"
-        )
+        + ("ignorado (--skip-setup)" if args.skip_setup else "automático")
     )
     print("=" * 60)
     print()
@@ -572,26 +465,18 @@ def main(
         validate_python_version()
         args = parse_args(argv)
 
-        print(
-            "[env] Verificando configuração do ambiente..."
-        )
+        print("[env] Verificando configuração do ambiente...")
         ensure_environment()
-        print(
-            "[env] Configuração concluída."
-        )
+        print("[env] Configuração concluída.")
 
         print_execution_summary(args)
 
-        docker_command = ensure_docker(
-            install_policy=docker_install_policy(args)
-        )
+        docker_command = ensure_docker(install_policy=docker_install_policy(args))
 
         recreate_local_parabank(
             docker_command=docker_command,
             base_url=settings.BASE_URL,
-            startup_timeout_seconds=(
-                settings.LOCAL_STARTUP_TIMEOUT_SECONDS
-            ),
+            startup_timeout_seconds=(settings.LOCAL_STARTUP_TIMEOUT_SECONDS),
         )
         environment_started = True
 
@@ -606,9 +491,7 @@ def main(
 
         prepare_allure_results()
 
-        runner_python = resolve_runner_python(
-            args.skip_setup
-        )
+        runner_python = resolve_runner_python(args.skip_setup)
 
         exit_code = run_behave(
             python_path=runner_python,
@@ -621,74 +504,38 @@ def main(
         print()
 
         if exit_code == 0:
-            print(
-                "[run] Suite concluída com sucesso."
-            )
+            print("[run] Suite concluída com sucesso.")
         else:
-            print(
-                "[run] Suite concluída com falhas ou erros."
-            )
+            print("[run] Suite concluída com falhas ou erros.")
 
-        print(
-            "[report] Resultados Allure: "
-            f"{ALLURE_RESULTS_DIR}"
-        )
+        print(f"[report] Resultados Allure: {ALLURE_RESULTS_DIR}")
 
         return exit_code
 
     except KeyboardInterrupt:
         print()
-        print(
-            "[run] Execução cancelada pelo usuário."
-        )
+        print("[run] Execução cancelada pelo usuário.")
         return 130
 
     except subprocess.CalledProcessError as exc:
         print()
-        print(
-            "[run][ERRO] Um comando de setup falhou."
-        )
-        print(
-            "[run][ERRO] Comando: "
-            + format_command(
-                [
-                    str(item)
-                    for item in exc.cmd
-                ]
-            )
-        )
-        print(
-            "[run][ERRO] Código de saída: "
-            f"{exc.returncode}"
-        )
+        print("[run][ERRO] Um comando de setup falhou.")
+        print("[run][ERRO] Comando: " + format_command([str(item) for item in exc.cmd]))
+        print(f"[run][ERRO] Código de saída: {exc.returncode}")
         return int(exc.returncode or 1)
 
     except Exception as exc:
         print()
-        print(
-            f"[run][ERRO] {exc}"
-        )
+        print(f"[run][ERRO] {exc}")
         return 1
 
     finally:
-        keep_environment = bool(
-            args
-            and args.keep_environment
-        )
+        keep_environment = bool(args and args.keep_environment)
 
-        if (
-            environment_started
-            and docker_command is not None
-            and not keep_environment
-        ):
-            stop_local_parabank(
-                docker_command
-            )
+        if environment_started and docker_command is not None and not keep_environment:
+            stop_local_parabank(docker_command)
         elif environment_started:
-            print(
-                "[environment] ParaBank local mantido ativo "
-                "(--keep-environment)."
-            )
+            print("[environment] ParaBank local mantido ativo (--keep-environment).")
 
 
 if __name__ == "__main__":

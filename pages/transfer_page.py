@@ -13,9 +13,7 @@ class TransferPage(BasePage):
         self.amount_input = page.locator("#amount")
         self.from_account_select = page.locator("#fromAccountId")
         self.to_account_select = page.locator("#toAccountId")
-        self.transfer_button = page.get_by_role(
-            "button", name="Transfer", exact=True
-        )
+        self.transfer_button = page.get_by_role("button", name="Transfer", exact=True)
 
         self.transfer_complete_title = page.get_by_role(
             "heading", name="Transfer Complete!", exact=True

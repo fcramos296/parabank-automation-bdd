@@ -21,9 +21,7 @@ def step_open_login(context) -> None:
 @given("que existe um usuário exclusivo cadastrado para autenticação")
 def step_seed_exclusive_login_user(context) -> None:
     context.login_customer = build_customer("login")
-    context.api_client.register_user(
-        context.login_customer.registration_payload()
-    )
+    context.api_client.register_user(context.login_customer.registration_payload())
     context.login_username = context.login_customer.username
     context.login_password = context.login_customer.password
 

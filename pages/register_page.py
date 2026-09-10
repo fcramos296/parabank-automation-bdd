@@ -31,20 +31,16 @@ class RegisterPage(BasePage):
         self.username_input = page.locator("input[id='customer.username']")
         self.password_input = page.locator("input[id='customer.password']")
         self.confirm_password_input = page.locator("input[id='repeatedPassword']")
-        self.register_button = page.get_by_role(
-            "button", name="Register", exact=True
-        )
+        self.register_button = page.get_by_role("button", name="Register", exact=True)
 
         self.success_title = page.locator("#rightPanel h1.title")
-        self.success_message = page.locator("#rightPanel p").filter(
-            has_text="Your account was created successfully."
-        ).first
-        self.username_error = page.locator(
-            "span[id='customer.username.errors']"
+        self.success_message = (
+            page.locator("#rightPanel p")
+            .filter(has_text="Your account was created successfully.")
+            .first
         )
-        self.confirm_password_error = page.locator(
-            "span[id='repeatedPassword.errors']"
-        )
+        self.username_error = page.locator("span[id='customer.username.errors']")
+        self.confirm_password_error = page.locator("span[id='repeatedPassword.errors']")
 
     def open(self) -> None:
         self.navigate_to("register.htm")

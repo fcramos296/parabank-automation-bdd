@@ -24,9 +24,7 @@ class ParabankApiClient:
 
     HTML_HEADERS = {
         "User-Agent": "parabank-automation-bdd/1.0",
-        "Accept": (
-            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-        ),
+        "Accept": ("text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"),
     }
 
     FORM_HEADERS = {
@@ -146,9 +144,7 @@ class ParabankApiClient:
 
         encoded_username = quote(username, safe="")
         encoded_password = quote(password, safe="")
-        url = (
-            f"{self.bank_api_url}/login/{encoded_username}/{encoded_password}"
-        )
+        url = f"{self.bank_api_url}/login/{encoded_username}/{encoded_password}"
 
         response = self.transport.request("GET", url, headers=self.JSON_HEADERS)
         self._raise_for_status(response, "customer login")
@@ -156,8 +152,7 @@ class ParabankApiClient:
 
         if not isinstance(customer, dict) or "id" not in customer:
             raise AssertionError(
-                "Unexpected login API response for customer "
-                f"'{username}': {customer!r}"
+                f"Unexpected login API response for customer '{username}': {customer!r}"
             )
 
         return customer
@@ -206,9 +201,7 @@ class ParabankApiClient:
         account = self._json_response(response, "create account")
 
         if not isinstance(account, dict) or "id" not in account:
-            raise AssertionError(
-                f"Unexpected create-account API response: {account!r}"
-            )
+            raise AssertionError(f"Unexpected create-account API response: {account!r}")
 
         return account
 
@@ -222,8 +215,7 @@ class ParabankApiClient:
 
         if not isinstance(account, dict) or "balance" not in account:
             raise AssertionError(
-                "Unexpected account API response for account "
-                f"{account_id}: {account!r}"
+                f"Unexpected account API response for account {account_id}: {account!r}"
             )
 
         return account

@@ -44,10 +44,7 @@ def before_all(context) -> None:
     context.playwright = sync_playwright().start()
     browser_type = getattr(context.playwright, context.browser_name)
 
-    print(
-        "[browser] Playwright will access "
-        f"ParaBank directly at {settings.BASE_URL}."
-    )
+    print(f"[browser] Playwright will access ParaBank directly at {settings.BASE_URL}.")
 
     if settings.BLOCK_NONESSENTIAL_RESOURCES:
         print("[browser] Non-essential resources are blocked.")

@@ -34,17 +34,13 @@ class Settings(BaseSettings):
             raise ValueError("LOCAL_BASE_URL cannot be empty.")
 
         if self.LOCAL_STARTUP_TIMEOUT_SECONDS <= 0:
-            raise ValueError(
-                "LOCAL_STARTUP_TIMEOUT_SECONDS must be greater than zero."
-            )
+            raise ValueError("LOCAL_STARTUP_TIMEOUT_SECONDS must be greater than zero.")
 
         if self.PW_TIMEOUT_MS <= 0:
             raise ValueError("PW_TIMEOUT_MS must be greater than zero.")
 
         if self.PW_NAVIGATION_TIMEOUT_MS <= 0:
-            raise ValueError(
-                "PW_NAVIGATION_TIMEOUT_MS must be greater than zero."
-            )
+            raise ValueError("PW_NAVIGATION_TIMEOUT_MS must be greater than zero.")
 
         if self.REQUEST_TIMEOUT_SECONDS <= 0:
             raise ValueError("REQUEST_TIMEOUT_SECONDS must be greater than zero.")
