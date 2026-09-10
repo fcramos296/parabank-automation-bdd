@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import SecretStr, model_validator
+from pydantic import model_validator
 from pydantic_settings import (
     BaseSettings,
     SettingsConfigDict,
@@ -8,9 +8,11 @@ from pydantic_settings import (
 
 
 class Settings(BaseSettings):
-    BASE_URL: str = (
-        "https://parabank.parasoft.com/parabank"
+    LOCAL_BASE_URL: str = (
+        "http://localhost:8080/parabank"
     )
+
+    LOCAL_STARTUP_TIMEOUT_SECONDS: float = 180.0
 
     HEADLESS: bool = True
 
@@ -26,40 +28,9 @@ class Settings(BaseSettings):
 
     REQUEST_TIMEOUT_SECONDS: float = 30.0
 
-    BACKEND_TRANSPORT: Literal[
-        "direct",
-        "proxy",
-        "auto",
-    ] = "proxy"
-
-    BROWSER_TRANSPORT: Literal[
-        "direct",
-        "proxy",
-    ] = "direct"
-
     BLOCK_NONESSENTIAL_RESOURCES: bool = True
 
-    UI_SCENARIO_DELAY_SECONDS: float = 2.0
-
-    PUBLIC_EXISTING_USERNAME: str = "john"
-
-    PUBLIC_EXISTING_PASSWORD: SecretStr = (
-        SecretStr("demo")
-    )
-
-    SCRAPE_DO_TOKEN: SecretStr | None = None
-
-    SCRAPE_DO_API_URL: str = (
-        "https://api.scrape.do/"
-    )
-
-    SCRAPE_DO_PROXY_URL: str = (
-        "http://proxy.scrape.do:8080"
-    )
-
-    SCRAPE_DO_BROWSER_PROXY_PARAMS: str = (
-        "render=false"
-    )
+    UI_SCENARIO_DELAY_SECONDS: float = 0.0
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -69,66 +40,48 @@ class Settings(BaseSettings):
     )
 
     @property
+    def BASE_URL(self) -> str:
+        return self.LOCAL_BASE_URL.rstrip("/")
+
+    @property
     def bank_api_url(self) -> str:
         return (
-            f"{self.BASE_URL.rstrip('/')}"
+            f"{self.BASE_URL}"
             "/services/bank"
         )
 
     @property
-    def public_existing_password(
-        self,
-    ) -> str:
-        return (
-            self.PUBLIC_EXISTING_PASSWORD
-            .get_secret_value()
-            .strip()
-        )
+    def BACKEND_TRANSPORT(self) -> str:
+        return "direct"
 
     @property
-    def scrape_do_token(
-        self,
-    ) -> str | None:
-        if self.SCRAPE_DO_TOKEN is None:
-            return None
-
-        value = (
-            self.SCRAPE_DO_TOKEN
-            .get_secret_value()
-            .strip()
-        )
-
-        return value or None
+    def BROWSER_TRANSPORT(self) -> str:
+        return "direct"
 
     @model_validator(mode="after")
     def validate_configuration(
         self,
     ) -> "Settings":
-        proxy_required = (
-            self.BACKEND_TRANSPORT == "proxy"
-            or self.BROWSER_TRANSPORT == "proxy"
-        )
-
-        if (
-            proxy_required
-            and not self.scrape_do_token
-        ):
+        if not self.LOCAL_BASE_URL.strip():
             raise ValueError(
-                "SCRAPE_DO_TOKEN is required "
-                "when a Scrape.do transport "
-                "is enabled."
+                "LOCAL_BASE_URL cannot be empty."
             )
 
-        if not self.PUBLIC_EXISTING_USERNAME.strip():
+        if self.LOCAL_STARTUP_TIMEOUT_SECONDS <= 0:
             raise ValueError(
-                "PUBLIC_EXISTING_USERNAME "
-                "cannot be empty."
+                "LOCAL_STARTUP_TIMEOUT_SECONDS "
+                "must be greater than zero."
             )
 
-        if not self.public_existing_password:
+        if self.PW_TIMEOUT_MS <= 0:
             raise ValueError(
-                "PUBLIC_EXISTING_PASSWORD "
-                "cannot be empty."
+                "PW_TIMEOUT_MS must be greater than zero."
+            )
+
+        if self.PW_NAVIGATION_TIMEOUT_MS <= 0:
+            raise ValueError(
+                "PW_NAVIGATION_TIMEOUT_MS "
+                "must be greater than zero."
             )
 
         if self.REQUEST_TIMEOUT_SECONDS <= 0:
