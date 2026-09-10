@@ -1,184 +1,100 @@
-from behave import (
-    given,
-    then,
-    use_step_matcher,
-    when,
-)
+from behave import given, then, when
 
 from pages.login_page import LoginPage
-from utils.test_data import (
-    build_customer,
-    unique_username,
-)
+from pages.transfer_page import TransferPage
+from utils.test_data import build_customer, unique_username
+
+
+EMPTY_VALUE = "[vazio]"
+
+
+def _normalize_example_value(value: str) -> str:
+    return "" if value == EMPTY_VALUE else value
 
 
 @given("que estou na tela de login")
-def step_open_login(
-    context,
-) -> None:
-    context.login_page = LoginPage(
-        context.page
-    )
-
+def step_open_login(context) -> None:
+    context.login_page = LoginPage(context.page)
     context.login_page.open()
 
 
-@given(
-    "que existe um usuário exclusivo "
-    "cadastrado para autenticação"
-)
-def step_seed_exclusive_login_user(
-    context,
-) -> None:
-    context.login_customer = (
-        build_customer("login")
-    )
-
+@given("que existe um usuário exclusivo cadastrado para autenticação")
+def step_seed_exclusive_login_user(context) -> None:
+    context.login_customer = build_customer("login")
     context.api_client.register_user(
-        context.login_customer
-        .registration_payload()
+        context.login_customer.registration_payload()
     )
-
-    context.login_username = (
-        context.login_customer.username
-    )
-
-    context.login_password = (
-        context.login_customer.password
-    )
+    context.login_username = context.login_customer.username
+    context.login_password = context.login_customer.password
 
 
-@when(
-    "informo as credenciais válidas "
-    "desse usuário"
-)
-def step_login_with_valid_credentials(
-    context,
-) -> None:
+@when("informo as credenciais válidas desse usuário")
+def step_login_with_valid_credentials(context) -> None:
     context.login_page.login(
         context.login_username,
         context.login_password,
     )
 
 
-@when(
-    "tento novamente com as credenciais "
-    "válidas desse usuário"
-)
-def step_retry_with_valid_credentials(
-    context,
-) -> None:
+@when("tento novamente com as credenciais válidas desse usuário")
+def step_retry_with_valid_credentials(context) -> None:
     context.login_page.login(
         context.login_username,
         context.login_password,
     )
 
 
-@when(
-    'realizo login com esse usuário e senha "{password}"'
-)
-def step_login_existing_user_wrong_password(
-    context,
-    password: str,
-) -> None:
-    context.login_page.login(
-        context.login_username,
-        password,
-    )
+@when('realizo login com esse usuário e senha "{password}"')
+def step_login_existing_user_wrong_password(context, password: str) -> None:
+    context.login_page.login(context.login_username, password)
 
 
-use_step_matcher("re")
+@when('realizo login com usuário "{username}" e senha "{password}"')
+def step_login_with_params(context, username: str, password: str) -> None:
+    normalized_username = _normalize_example_value(username)
+    normalized_password = _normalize_example_value(password)
 
-
-@when(
-    r'realizo login com usuário '
-    r'"(?P<username>.*)" e senha '
-    r'"(?P<password>.*)"'
-)
-def step_login_with_params(
-    context,
-    username: str,
-    password: str,
-) -> None:
     username_to_use = (
         unique_username("invalid")
-        if username == "inexistente"
-        else username
+        if normalized_username == "inexistente"
+        else normalized_username
     )
 
-    context.login_page.login(
-        username_to_use,
-        password,
-    )
-
-
-use_step_matcher("parse")
+    context.login_page.login(username_to_use, normalized_password)
 
 
 @when("recarrego a página autenticada")
-def step_reload_authenticated_page(
-    context,
-) -> None:
+def step_reload_authenticated_page(context) -> None:
     context.login_page.reload_authenticated_page()
 
 
 @when("solicito o logout")
-def step_logout(
-    context,
-) -> None:
+def step_logout(context) -> None:
     context.login_page.logout()
 
 
-@when(
-    "tento acessar diretamente "
-    "a transferência de fundos"
-)
-def step_open_protected_transfer(
-    context,
-) -> None:
-    context.login_page.open_protected_area(
-        "transfer.htm"
-    )
+@when("tento acessar diretamente a transferência de fundos")
+def step_open_protected_transfer(context) -> None:
+    context.transfer_page = TransferPage(context.page)
+    context.transfer_page.open_direct()
 
 
-@then(
-    "devo estar autenticado e "
-    "visualizar os serviços da conta"
-)
-def step_validate_login_success(
-    context,
-) -> None:
+@then("devo estar autenticado e visualizar os serviços da conta")
+def step_validate_login_success(context) -> None:
     context.login_page.validate_login_success()
 
 
-@then(
-    'devo visualizar a mensagem de erro '
-    'de autenticação "{error_message}"'
-)
-def step_validate_login_failure(
-    context,
-    error_message: str,
-) -> None:
-    context.login_page.validate_login_failure(
-        error_message
-    )
+@then('devo visualizar a mensagem de erro de autenticação "{error_message}"')
+def step_validate_login_failure(context, error_message: str) -> None:
+    context.login_page.validate_login_failure(error_message)
 
 
-@then(
-    "devo retornar à tela de login "
-    "sem sessão autenticada"
-)
-def step_validate_logout(
-    context,
-) -> None:
+@then("devo retornar à tela de login sem sessão autenticada")
+def step_validate_logout(context) -> None:
     context.login_page.validate_logged_out()
 
 
-@then(
-    "a área protegida deve permanecer "
-    "inacessível sem sessão autenticada"
-)
-def step_validate_protected_area_blocked(
-    context,
-) -> None:
-    context.login_page.validate_protected_area_blocked()
+@then("a área protegida deve permanecer inacessível sem sessão autenticada")
+def step_validate_protected_area_blocked(context) -> None:
+    context.login_page.validate_no_authenticated_session()
+    context.transfer_page.validate_unavailable_without_session()
