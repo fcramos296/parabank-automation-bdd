@@ -7,6 +7,19 @@ from pages.base_page import BasePage
 
 
 class RegisterPage(BasePage):
+    REQUIRED_FIELD_ERRORS = {
+        "customer.firstName": "First name is required.",
+        "customer.lastName": "Last name is required.",
+        "customer.address.street": "Address is required.",
+        "customer.address.city": "City is required.",
+        "customer.address.state": "State is required.",
+        "customer.address.zipCode": "Zip Code is required.",
+        "customer.ssn": "Social Security Number is required.",
+        "customer.username": "Username is required.",
+        "customer.password": "Password is required.",
+        "repeatedPassword": "Password confirmation is required.",
+    }
+
     def __init__(
         self,
         page: Page,
@@ -133,6 +146,26 @@ class RegisterPage(BasePage):
         ).to_contain_text(
             "Your account was created successfully."
         )
+
+    def validate_required_field_errors(
+        self,
+    ) -> None:
+        for field_id, message in (
+            self.REQUIRED_FIELD_ERRORS.items()
+        ):
+            error = self.page.locator(
+                f"span[id='{field_id}.errors']"
+            )
+
+            expect(
+                error
+            ).to_be_visible()
+
+            expect(
+                error
+            ).to_contain_text(
+                message
+            )
 
     def validate_username_error(
         self,
