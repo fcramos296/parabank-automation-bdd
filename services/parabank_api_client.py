@@ -120,24 +120,24 @@ class ParabankApiClient:
         """
 
         registration_url = f"{self.base_url}/register.htm"
-        session = self._new_registration_session()
 
-        bootstrap_response = self.transport.request(
-            "GET",
-            registration_url,
-            headers=self.HTML_HEADERS,
-            session=session,
-        )
-        self._validate_registration_bootstrap(bootstrap_response)
+        with self._new_registration_session() as session:
+            bootstrap_response = self.transport.request(
+                "GET",
+                registration_url,
+                headers=self.HTML_HEADERS,
+                session=session,
+            )
+            self._validate_registration_bootstrap(bootstrap_response)
 
-        response = self.transport.request(
-            "POST",
-            registration_url,
-            data=payload,
-            headers={**self.FORM_HEADERS, "Referer": registration_url},
-            session=session,
-        )
-        return self._validate_registration_response(response)
+            response = self.transport.request(
+                "POST",
+                registration_url,
+                data=payload,
+                headers={**self.FORM_HEADERS, "Referer": registration_url},
+                session=session,
+            )
+            return self._validate_registration_response(response)
 
     def login_customer(self, username: str, password: str) -> dict:
         """Authenticate a customer through ParaBank's REST API."""
@@ -266,3 +266,8 @@ class ParabankApiClient:
             f"Account {account_id} balance did not reach {expected_balance}. "
             f"Last observed balance: {last_balance}"
         )
+
+    def close(self) -> None:
+        """Release persistent HTTP resources used by the API client."""
+
+        self.transport.close()

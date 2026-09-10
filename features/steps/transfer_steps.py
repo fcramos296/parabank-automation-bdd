@@ -7,6 +7,7 @@ from behave import given, then, when
 from pages.login_page import LoginPage
 from pages.transfer_page import TransferPage
 from services.parabank_api_client import AccountType
+from utils.gherkin_values import normalize_example_value
 from utils.test_data import build_customer
 
 
@@ -16,7 +17,6 @@ TRANSFER_TRANSACTION_TIMEOUT_SECONDS = 8.0
 TRANSFER_TRANSACTION_POLL_SECONDS = 0.5
 NEGATIVE_STABILIZATION_SECONDS = 2.0
 NEGATIVE_POLL_SECONDS = 0.25
-EMPTY_VALUE = "[vazio]"
 
 
 def _account_balance(account: dict) -> Decimal:
@@ -183,8 +183,6 @@ def _wait_for_transfer_transactions(context) -> None:
         )
 
         if debit is not None and credit is not None:
-            context.transfer_debit = debit
-            context.transfer_credit = credit
             return
 
         time.sleep(TRANSFER_TRANSACTION_POLL_SECONDS)
@@ -247,15 +245,12 @@ def _assert_transactions_unchanged_during_stabilization(context) -> None:
 @given("que estou autenticado com um usuário exclusivo e possuo duas contas")
 def step_auth_with_two_accounts(context) -> None:
     customer = build_customer("transfer")
-    context.transfer_customer = customer
-
     context.api_client.register_user(customer.registration_payload())
     customer_data = context.api_client.login_customer(
         customer.username,
         customer.password,
     )
     customer_id = int(customer_data["id"])
-    context.transfer_customer_id = customer_id
 
     existing_accounts = context.api_client.get_customer_accounts(customer_id)
     source_account = _select_source_account(existing_accounts)
@@ -331,7 +326,7 @@ def step_transfer_full_balance(context) -> None:
 
 @when('realizo a tentativa de transferência com valor "{amount}"')
 def step_attempt_invalid_transfer(context, amount: str) -> None:
-    normalized_amount = "" if amount == EMPTY_VALUE else amount
+    normalized_amount = normalize_example_value(amount)
     _capture_transfer_state(
         context,
         from_account_id=context.primary_account_id,

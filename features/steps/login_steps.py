@@ -2,14 +2,8 @@ from behave import given, then, when
 
 from pages.login_page import LoginPage
 from pages.transfer_page import TransferPage
+from utils.gherkin_values import normalize_example_value
 from utils.test_data import build_customer, unique_username
-
-
-EMPTY_VALUE = "[vazio]"
-
-
-def _normalize_example_value(value: str) -> str:
-    return "" if value == EMPTY_VALUE else value
 
 
 @given("que estou na tela de login")
@@ -49,8 +43,8 @@ def step_login_existing_user_wrong_password(context, password: str) -> None:
 
 @when('realizo login com usuário "{username}" e senha "{password}"')
 def step_login_with_params(context, username: str, password: str) -> None:
-    normalized_username = _normalize_example_value(username)
-    normalized_password = _normalize_example_value(password)
+    normalized_username = normalize_example_value(username)
+    normalized_password = normalize_example_value(password)
 
     username_to_use = (
         unique_username("invalid")
