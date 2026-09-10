@@ -37,7 +37,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   PYTHONUNBUFFERED: "1"
@@ -58,8 +58,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref || github.ref }}
 
       - name: Setup Python
         uses: actions/setup-python@v7
@@ -109,24 +107,9 @@ jobs:
         shell: bash
         run: python -m ruff check .
 
-      - name: Format Python working tree with Ruff
+      - name: Validate Ruff formatting
         shell: bash
-        run: python -m ruff format .
-
-      - name: Commit Ruff formatting
-        if: github.event_name == 'pull_request'
-        shell: bash
-        run: |
-          if git diff --quiet; then
-            echo "Python sources are already formatted."
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- '*.py'
-          git commit -m "Apply Ruff formatting"
-          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
+        run: python -m ruff format --check .
 
       - name: Validate BDD step bindings
         shell: bash
