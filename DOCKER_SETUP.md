@@ -110,8 +110,6 @@ docker compose down --volumes --remove-orphans
                 ↓
 docker compose up -d
                 ↓
-healthcheck do container
-                ↓
 readiness HTTP em /parabank/index.htm
                 ↓
 executa os testes
@@ -119,7 +117,7 @@ executa os testes
 docker compose down --volumes --remove-orphans
 ```
 
-A checagem HTTP no host permanece propositalmente: porta aberta não garante que a aplicação web já esteja pronta para receber os cenários.
+A checagem HTTP no host é a fonte única de readiness do SUT: além de validar que o container iniciou, ela confirma que a aplicação ParaBank já responde antes de liberar a execução dos cenários.
 
 Para manter o ambiente ativo após os testes:
 
