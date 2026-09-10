@@ -4,9 +4,3 @@ services:
     ports:
       - "8080:8080"
     restart: "no"
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080'"]
-      interval: 5s
-      timeout: 3s
-      retries: 24
-      start_period: 10s
