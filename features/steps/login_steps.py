@@ -155,13 +155,10 @@ def step_validate_logout(
 
 
 @then(
-    'devo ser solicitado a autenticar novamente '
-    'com a mensagem "{error_message}"'
+    "a área protegida deve permanecer "
+    "inacessível sem sessão autenticada"
 )
-def step_validate_protected_area(
+def step_validate_protected_area_blocked(
     context,
-    error_message: str,
 ) -> None:
-    context.login_page.validate_authentication_required(
-        error_message
-    )
+    context.login_page.validate_protected_area_blocked()
