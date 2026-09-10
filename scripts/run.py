@@ -24,6 +24,7 @@ if str(PROJECT_ROOT) not in sys.path:
         str(PROJECT_ROOT),
     )
 
+from bootstrap_docker import ensure_docker
 from config.settings import settings
 from configure_env import ensure_environment
 from parabank_env import (
@@ -119,7 +120,7 @@ def parse_args(
         help=(
             "Não cria venv, não instala dependências "
             "e não instala browser. O ambiente Docker "
-            "continua sendo recriado normalmente."
+            "continua sendo preparado normalmente."
         ),
     )
 
@@ -129,6 +130,29 @@ def parse_args(
         help=(
             "Mantém o container ParaBank ativo após "
             "a execução para inspeção manual."
+        ),
+    )
+
+    docker_group = parser.add_mutually_exclusive_group()
+
+    docker_group.add_argument(
+        "--install-docker",
+        action="store_true",
+        help=(
+            "Autoriza a instalação automática do Docker "
+            "quando ele não estiver disponível, sem "
+            "perguntar antes. Pode solicitar privilégios "
+            "administrativos do sistema operacional."
+        ),
+    )
+
+    docker_group.add_argument(
+        "--no-docker-install",
+        action="store_true",
+        help=(
+            "Nunca instala Docker automaticamente. Falha "
+            "com instruções quando Docker não estiver "
+            "disponível."
         ),
     )
 
@@ -153,6 +177,18 @@ def validate_python_version() -> None:
             f"Encontrado: {current}. "
             f"Requerido: Python {expected}+."
         )
+
+
+def docker_install_policy(
+    args: argparse.Namespace,
+) -> str:
+    if args.install_docker:
+        return "always"
+
+    if args.no_docker_install:
+        return "never"
+
+    return "ask"
 
 
 def venv_python() -> Path:
@@ -490,6 +526,14 @@ def print_execution_summary(
         else "headless"
     )
 
+    policy = docker_install_policy(args)
+
+    docker_setup = {
+        "ask": "automático com confirmação se ausente",
+        "always": "instalação autorizada",
+        "never": "instalação desabilitada",
+    }[policy]
+
     print()
     print("=" * 60)
     print("PARABANK AUTOMATION - LOCAL DOCKER")
@@ -504,10 +548,11 @@ def print_execution_summary(
     print("Browser net...: direct")
     print(f"Browser.......: {args.browser}")
     print(f"Modo..........: {execution_mode}")
+    print(f"Docker........: {docker_setup}")
     print(
-        "Setup.........: "
+        "Setup Python..: "
         + (
-            "Python ignorado (--skip-setup)"
+            "ignorado (--skip-setup)"
             if args.skip_setup
             else "automático"
         )
@@ -520,6 +565,7 @@ def main(
     argv: Sequence[str] | None = None,
 ) -> int:
     environment_started = False
+    docker_command: list[str] | None = None
     args: argparse.Namespace | None = None
 
     try:
@@ -536,7 +582,12 @@ def main(
 
         print_execution_summary(args)
 
+        docker_command = ensure_docker(
+            install_policy=docker_install_policy(args)
+        )
+
         recreate_local_parabank(
+            docker_command=docker_command,
             base_url=settings.BASE_URL,
             startup_timeout_seconds=(
                 settings.LOCAL_STARTUP_TIMEOUT_SECONDS
@@ -598,6 +649,15 @@ def main(
             "[run][ERRO] Um comando de setup falhou."
         )
         print(
+            "[run][ERRO] Comando: "
+            + format_command(
+                [
+                    str(item)
+                    for item in exc.cmd
+                ]
+            )
+        )
+        print(
             "[run][ERRO] Código de saída: "
             f"{exc.returncode}"
         )
@@ -618,9 +678,12 @@ def main(
 
         if (
             environment_started
+            and docker_command is not None
             and not keep_environment
         ):
-            stop_local_parabank()
+            stop_local_parabank(
+                docker_command
+            )
         elif environment_started:
             print(
                 "[environment] ParaBank local mantido ativo "
