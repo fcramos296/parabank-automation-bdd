@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/topaz-readme.jpeg" alt="Topaz | Stefanini" width="334" />
+  <img src="https://raw.githubusercontent.com/fcramos296/parabank-automation-bdd/4d402e0ae24f6fa958b4618e720084b0d0969dfb/assets/topaz-readme.jpeg" alt="Topaz | Stefanini" width="334" />
 </p>
 
 <h1 align="center">ParaBank Automation BDD</h1>
