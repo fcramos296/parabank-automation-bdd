@@ -1,0 +1,57 @@
+name: "Topaz | ParaBank Automation BDD"
+output: "./reports/allure-report"
+
+variables:
+  Projeto: "ParaBank Automation BDD"
+  Empresa: "Topaz"
+  Ambiente: "ParaBank local via Docker"
+  Stack: "Python + Playwright + Behave"
+
+# Labels padrão enriquecem os filtros e a navegação do relatório.
+defaultLabels:
+  layer: "e2e"
+  framework: "behave"
+  language: "python"
+  component: "parabank"
+
+# Categorias orientadas ao diagnóstico das falhas.
+categories:
+  rules:
+    - name: "Timeout / sincronização"
+      id: "timeout-sync"
+      matchers:
+        statuses:
+          - "failed"
+          - "broken"
+        message: "Timeout|timed out|TimeoutError"
+        trace: "Timeout|timed out|TimeoutError"
+      groupBy:
+        - label: "feature"
+
+    - name: "Falha funcional"
+      id: "functional-failure"
+      matchers:
+        statuses:
+          - "failed"
+        trace: "AssertionError|expect\\(|Assertion"
+      groupBy:
+        - label: "feature"
+
+    - name: "Falha de automação / infraestrutura"
+      id: "automation-infrastructure"
+      matchers:
+        statuses:
+          - "broken"
+      groupBy:
+        - label: "feature"
+
+plugins:
+  awesome:
+    options:
+      reportName: "Topaz | ParaBank QA Automation"
+      logo: "./assets/topaz-logo.png"
+      theme: "dark"
+      reportLanguage: "en"
+      singleFile: false
+      stepTreeExpansion: "expand_failed_only"
+      defaultSortBy: "status,asc"
