@@ -26,10 +26,6 @@ class LoginPage(BasePage):
             name="Log In",
         )
 
-        self.error_message = page.locator(
-            "p.error"
-        )
-
         self.authenticated_panel = page.locator(
             "#leftPanel"
         )
@@ -48,6 +44,26 @@ class LoginPage(BasePage):
             )
         )
 
+        self.transfer_amount_input = (
+            page.locator(
+                "#amount"
+            )
+        )
+
+        self.transfer_button = (
+            page.get_by_role(
+                "button",
+                name="Transfer",
+                exact=True,
+            )
+        )
+
+    @property
+    def visible_error_message(self):
+        return self.page.locator(
+            "p.error:visible"
+        ).first
+
     def open(self) -> None:
         self.navigate_to(
             "index.htm"
@@ -60,6 +76,10 @@ class LoginPage(BasePage):
         expect(
             self.password_input
         ).to_be_visible()
+
+        expect(
+            self.logout_link
+        ).not_to_be_visible()
 
     def login(
         self,
@@ -76,14 +96,41 @@ class LoginPage(BasePage):
 
         self.login_button.click()
 
+    def reload_authenticated_page(self) -> None:
+        expect(
+            self.logout_link
+        ).to_be_visible()
+
+        self.page.reload(
+            wait_until="domcontentloaded"
+        )
+
+    def logout(self) -> None:
+        expect(
+            self.logout_link
+        ).to_be_visible()
+
+        self.logout_link.click()
+
+        expect(
+            self.username_input
+        ).to_be_visible()
+
+        expect(
+            self.password_input
+        ).to_be_visible()
+
+    def open_protected_area(
+        self,
+        path: str,
+    ) -> None:
+        self.navigate_to(
+            path
+        )
+
     def validate_login_success(
         self,
     ) -> None:
-        """
-        Valida autenticação sem depender do carregamento
-        do serviço Accounts Overview.
-        """
-
         expect(
             self.authenticated_panel
         ).to_contain_text(
@@ -103,33 +150,64 @@ class LoginPage(BasePage):
         expected_message: str,
     ) -> None:
         expect(
-            self.error_message.first
+            self.visible_error_message
         ).to_be_visible()
 
         expect(
-            self.error_message.first
+            self.visible_error_message
         ).to_contain_text(
             expected_message
         )
 
-    def validate_unauthenticated_with_error(
-        self,
-    ) -> None:
-        """
-        Valida que a tentativa de autenticação inválida
-        produziu uma resposta de erro.
-
-        O ambiente público do ParaBank pode renderizar
-        elementos inconsistentes do menu lateral, inclusive
-        o link Log Out, mesmo após uma tentativa inválida.
-        Por isso o estado negativo é validado pelo retorno
-        explícito de erro da aplicação.
-        """
-
         expect(
-            self.error_message.first
+            self.username_input
         ).to_be_visible()
 
         expect(
-            self.error_message.first
-        ).not_to_have_text("")
+            self.logout_link
+        ).not_to_be_visible()
+
+    def validate_logged_out(
+        self,
+    ) -> None:
+        expect(
+            self.username_input
+        ).to_be_visible()
+
+        expect(
+            self.password_input
+        ).to_be_visible()
+
+        expect(
+            self.logout_link
+        ).not_to_be_visible()
+
+        expect(
+            self.account_services_title
+        ).not_to_be_visible()
+
+    def validate_protected_area_blocked(
+        self,
+    ) -> None:
+        """
+        Confirms that a protected function cannot be used
+        after logout, without coupling the test to the exact
+        error page/message returned by the current ParaBank
+        version for a direct unauthenticated request.
+        """
+
+        expect(
+            self.logout_link
+        ).not_to_be_visible()
+
+        expect(
+            self.account_services_title
+        ).not_to_be_visible()
+
+        expect(
+            self.transfer_amount_input
+        ).not_to_be_visible()
+
+        expect(
+            self.transfer_button
+        ).not_to_be_visible()

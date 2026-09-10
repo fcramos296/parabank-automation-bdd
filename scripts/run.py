@@ -10,12 +10,6 @@ import venv
 from pathlib import Path
 from typing import Sequence
 
-from configure_env import ensure_environment
-
-
-# ============================================================
-# PROJECT PATHS
-# ============================================================
 
 PROJECT_ROOT = (
     Path(__file__)
@@ -24,32 +18,30 @@ PROJECT_ROOT = (
     .parent
 )
 
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(
+        0,
+        str(PROJECT_ROOT),
+    )
+
+from bootstrap_docker import ensure_docker
+from config.settings import settings
+from configure_env import ensure_environment
+from parabank_env import (
+    recreate_local_parabank,
+    stop_local_parabank,
+)
+
+
 VENV_DIR = PROJECT_ROOT / ".venv"
-
-REQUIREMENTS_FILE = (
-    PROJECT_ROOT
-    / "requirements.txt"
-)
-
+REQUIREMENTS_FILE = PROJECT_ROOT / "requirements.txt"
 REQUIREMENTS_HASH_FILE = (
-    VENV_DIR
-    / ".requirements.sha256"
+    VENV_DIR / ".requirements.sha256"
 )
-
-REPORTS_DIR = (
-    PROJECT_ROOT
-    / "reports"
-)
-
+REPORTS_DIR = PROJECT_ROOT / "reports"
 ALLURE_RESULTS_DIR = (
-    REPORTS_DIR
-    / "allure-results"
+    REPORTS_DIR / "allure-results"
 )
-
-
-# ============================================================
-# SUPPORTED CONFIGURATION
-# ============================================================
 
 SUPPORTED_BROWSERS = (
     "chromium",
@@ -58,11 +50,7 @@ SUPPORTED_BROWSERS = (
 )
 
 FEATURE_SCOPES = {
-    "login": (
-        PROJECT_ROOT
-        / "features"
-        / "login.feature"
-    ),
+    "login": PROJECT_ROOT / "features" / "login.feature",
     "registration": (
         PROJECT_ROOT
         / "features"
@@ -81,16 +69,12 @@ MINIMUM_PYTHON = (
 )
 
 
-# ============================================================
-# CLI
-# ============================================================
-
 def parse_args(
     argv: Sequence[str] | None = None,
 ) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "ParaBank automation runner."
+            "ParaBank local Docker automation runner."
         ),
         formatter_class=(
             argparse.ArgumentDefaultsHelpFormatter
@@ -99,9 +83,7 @@ def parse_args(
 
     parser.add_argument(
         "--scope",
-        choices=tuple(
-            FEATURE_SCOPES
-        ),
+        choices=tuple(FEATURE_SCOPES),
         help=(
             "Executa apenas uma feature específica."
         ),
@@ -137,19 +119,45 @@ def parse_args(
         action="store_true",
         help=(
             "Não cria venv, não instala dependências "
-            "e não instala browser. "
-            "Útil para CI após o setup já ter sido feito."
+            "e não instala browser. O ambiente Docker "
+            "continua sendo preparado normalmente."
         ),
     )
 
-    return parser.parse_args(
-        argv
+    parser.add_argument(
+        "--keep-environment",
+        action="store_true",
+        help=(
+            "Mantém o container ParaBank ativo após "
+            "a execução para inspeção manual."
+        ),
     )
 
+    docker_group = parser.add_mutually_exclusive_group()
 
-# ============================================================
-# PYTHON VALIDATION
-# ============================================================
+    docker_group.add_argument(
+        "--install-docker",
+        action="store_true",
+        help=(
+            "Autoriza a instalação automática do Docker "
+            "quando ele não estiver disponível, sem "
+            "perguntar antes. Pode solicitar privilégios "
+            "administrativos do sistema operacional."
+        ),
+    )
+
+    docker_group.add_argument(
+        "--no-docker-install",
+        action="store_true",
+        help=(
+            "Nunca instala Docker automaticamente. Falha "
+            "com instruções quando Docker não estiver "
+            "disponível."
+        ),
+    )
+
+    return parser.parse_args(argv)
+
 
 def validate_python_version() -> None:
     if sys.version_info < MINIMUM_PYTHON:
@@ -171,38 +179,17 @@ def validate_python_version() -> None:
         )
 
 
-# ============================================================
-# ENVIRONMENT CONFIGURATION
-# ============================================================
+def docker_install_policy(
+    args: argparse.Namespace,
+) -> str:
+    if args.install_docker:
+        return "always"
 
-def configure_environment() -> None:
-    """
-    Ensures SCRAPE_DO_TOKEN is available.
+    if args.no_docker_install:
+        return "never"
 
-    Local execution:
-        - creates .env if needed;
-        - interactively requests the token if missing.
+    return "ask"
 
-    CI/non-interactive execution:
-        - uses SCRAPE_DO_TOKEN from environment;
-        - never opens an interactive prompt.
-    """
-
-    print(
-        "[env] Verificando configuração "
-        "do ambiente..."
-    )
-
-    ensure_environment()
-
-    print(
-        "[env] Configuração concluída."
-    )
-
-
-# ============================================================
-# VIRTUAL ENVIRONMENT
-# ============================================================
 
 def venv_python() -> Path:
     if os.name == "nt":
@@ -220,17 +207,14 @@ def venv_python() -> Path:
 
 
 def create_virtualenv() -> None:
-    python_path = (
-        venv_python()
-    )
+    python_path = venv_python()
 
     if (
         VENV_DIR.exists()
         and python_path.exists()
     ):
         print(
-            "[setup] Ambiente virtual "
-            ".venv já existe."
+            "[setup] Ambiente virtual .venv já existe."
         )
         return
 
@@ -239,10 +223,7 @@ def create_virtualenv() -> None:
             "[setup] .venv incompleta encontrada; "
             "recriando..."
         )
-
-        shutil.rmtree(
-            VENV_DIR
-        )
+        shutil.rmtree(VENV_DIR)
 
     print(
         "[setup] Criando ambiente virtual .venv..."
@@ -251,20 +232,15 @@ def create_virtualenv() -> None:
     builder = venv.EnvBuilder(
         with_pip=True,
         clear=False,
-        symlinks=(
-            os.name != "nt"
-        ),
+        symlinks=(os.name != "nt"),
     )
 
-    builder.create(
-        VENV_DIR
-    )
+    builder.create(VENV_DIR)
 
     if not python_path.exists():
         raise RuntimeError(
-            "O ambiente virtual foi criado, "
-            "mas o executável Python não "
-            "foi encontrado."
+            "O ambiente virtual foi criado, mas o "
+            "executável Python não foi encontrado."
         )
 
     print(
@@ -272,29 +248,17 @@ def create_virtualenv() -> None:
     )
 
 
-# ============================================================
-# REQUIREMENTS
-# ============================================================
-
 def file_sha256(
     path: Path,
 ) -> str:
-    digest = (
-        hashlib.sha256()
-    )
+    digest = hashlib.sha256()
 
-    with path.open(
-        "rb"
-    ) as file:
+    with path.open("rb") as file:
         for chunk in iter(
-            lambda: file.read(
-                1024 * 1024
-            ),
+            lambda: file.read(1024 * 1024),
             b"",
         ):
-            digest.update(
-                chunk
-            )
+            digest.update(chunk)
 
     return digest.hexdigest()
 
@@ -314,23 +278,16 @@ def requirements_changed() -> bool:
 
     stored_hash = (
         REQUIREMENTS_HASH_FILE
-        .read_text(
-            encoding="utf-8"
-        )
+        .read_text(encoding="utf-8")
         .strip()
     )
 
-    return (
-        current_hash
-        != stored_hash
-    )
+    return current_hash != stored_hash
 
 
 def save_requirements_hash() -> None:
     REQUIREMENTS_HASH_FILE.write_text(
-        file_sha256(
-            REQUIREMENTS_FILE
-        ),
+        file_sha256(REQUIREMENTS_FILE),
         encoding="utf-8",
     )
 
@@ -354,24 +311,16 @@ def run_command(
 
 
 def install_dependencies() -> None:
-    python_path = (
-        venv_python()
-    )
+    python_path = venv_python()
 
     if not requirements_changed():
         print(
-            "[setup] Dependências já estão "
-            "atualizadas."
+            "[setup] Dependências já estão atualizadas."
         )
         return
 
     print(
-        "[setup] requirements.txt mudou "
-        "ou é a primeira execução."
-    )
-
-    print(
-        "[setup] Atualizando pip..."
+        "[setup] Instalando/atualizando dependências..."
     )
 
     run_command(
@@ -383,10 +332,6 @@ def install_dependencies() -> None:
             "--upgrade",
             "pip",
         ]
-    )
-
-    print(
-        "[setup] Instalando dependências..."
     )
 
     run_command(
@@ -407,25 +352,17 @@ def install_dependencies() -> None:
     )
 
 
-# ============================================================
-# PLAYWRIGHT
-# ============================================================
-
 def ensure_playwright_browser(
     browser: str,
 ) -> None:
-    python_path = (
-        venv_python()
-    )
-
     print(
-        "[setup] Ensuring Playwright browser "
-        f"is installed: {browser}"
+        "[setup] Ensuring Playwright browser is installed: "
+        f"{browser}"
     )
 
     run_command(
         [
-            python_path,
+            venv_python(),
             "-m",
             "playwright",
             "install",
@@ -434,9 +371,13 @@ def ensure_playwright_browser(
     )
 
 
-# ============================================================
-# REPORTS
-# ============================================================
+def setup_project(
+    browser: str,
+) -> None:
+    create_virtualenv()
+    install_dependencies()
+    ensure_playwright_browser(browser)
+
 
 def prepare_allure_results() -> None:
     REPORTS_DIR.mkdir(
@@ -446,13 +387,9 @@ def prepare_allure_results() -> None:
 
     if ALLURE_RESULTS_DIR.exists():
         print(
-            "[report] Limpando resultados "
-            "Allure anteriores..."
+            "[report] Limpando resultados Allure anteriores..."
         )
-
-        shutil.rmtree(
-            ALLURE_RESULTS_DIR
-        )
+        shutil.rmtree(ALLURE_RESULTS_DIR)
 
     ALLURE_RESULTS_DIR.mkdir(
         parents=True,
@@ -460,33 +397,13 @@ def prepare_allure_results() -> None:
     )
 
 
-# ============================================================
-# BEHAVE
-# ============================================================
-
 def resolve_runner_python(
     skip_setup: bool,
 ) -> Path:
-    """
-    Local setup:
-        use .venv Python.
-
-    --skip-setup:
-        use the current interpreter.
-
-    This makes --skip-setup appropriate for CI, where
-    dependencies may already have been installed into
-    the runner's Python environment.
-    """
-
     if skip_setup:
-        return Path(
-            sys.executable
-        )
+        return Path(sys.executable)
 
-    python_path = (
-        venv_python()
-    )
+    python_path = venv_python()
 
     if not python_path.exists():
         raise RuntimeError(
@@ -505,25 +422,18 @@ def build_behave_command(
     headed: bool,
 ) -> list[str]:
     command = [
-        str(
-            python_path
-        ),
+        str(python_path),
         "-m",
         "behave",
     ]
 
     if scope:
-        feature_path = (
-            FEATURE_SCOPES[
-                scope
-            ]
-        )
+        feature_path = FEATURE_SCOPES[scope]
 
         if not feature_path.exists():
             raise FileNotFoundError(
-                "Feature não encontrada para "
-                f"o escopo '{scope}': "
-                f"{feature_path}"
+                "Feature não encontrada para o escopo "
+                f"'{scope}': {feature_path}"
             )
 
         command.append(
@@ -561,24 +471,14 @@ def build_behave_command(
 def format_command(
     command: Sequence[str],
 ) -> str:
-    """
-    Human-readable command for logs.
-
-    This command contains no secrets.
-    """
-
     if os.name == "nt":
         return subprocess.list2cmdline(
-            list(
-                command
-            )
+            list(command)
         )
 
     import shlex
 
-    return shlex.join(
-        command
-    )
+    return shlex.join(command)
 
 
 def run_behave(
@@ -599,9 +499,7 @@ def run_behave(
 
     print(
         "[run] "
-        + format_command(
-            command
-        )
+        + format_command(command)
     )
 
     completed = subprocess.run(
@@ -610,30 +508,8 @@ def run_behave(
         check=False,
     )
 
-    return int(
-        completed.returncode
-    )
+    return int(completed.returncode)
 
-
-# ============================================================
-# SETUP
-# ============================================================
-
-def setup_project(
-    browser: str,
-) -> None:
-    create_virtualenv()
-
-    install_dependencies()
-
-    ensure_playwright_browser(
-        browser
-    )
-
-
-# ============================================================
-# EXECUTION SUMMARY
-# ============================================================
 
 def print_execution_summary(
     args: argparse.Namespace,
@@ -650,78 +526,77 @@ def print_execution_summary(
         else "headless"
     )
 
+    policy = docker_install_policy(args)
+
+    docker_setup = {
+        "ask": "automático com confirmação se ausente",
+        "always": "instalação autorizada",
+        "never": "instalação desabilitada",
+    }[policy]
+
     print()
-    print(
-        "=" * 60
-    )
-    print(
-        "PARABANK AUTOMATION"
-    )
-    print(
-        "=" * 60
-    )
-    print(
-        f"Escopo........: {scope}"
-    )
+    print("=" * 60)
+    print("PARABANK AUTOMATION - LOCAL DOCKER")
+    print("=" * 60)
+    print(f"Escopo........: {scope}")
 
     if args.tags:
-        print(
-            f"Tags..........: {args.tags}"
-        )
+        print(f"Tags..........: {args.tags}")
 
+    print(f"Base URL......: {settings.BASE_URL}")
+    print("Backend.......: direct")
+    print("Browser net...: direct")
+    print(f"Browser.......: {args.browser}")
+    print(f"Modo..........: {execution_mode}")
+    print(f"Docker........: {docker_setup}")
     print(
-        f"Browser.......: {args.browser}"
-    )
-    print(
-        f"Modo..........: {execution_mode}"
-    )
-    print(
-        "Setup.........: "
+        "Setup Python..: "
         + (
             "ignorado (--skip-setup)"
             if args.skip_setup
             else "automático"
         )
     )
-    print(
-        "=" * 60
-    )
+    print("=" * 60)
     print()
 
-
-# ============================================================
-# MAIN
-# ============================================================
 
 def main(
     argv: Sequence[str] | None = None,
 ) -> int:
+    environment_started = False
+    docker_command: list[str] | None = None
+    args: argparse.Namespace | None = None
+
     try:
         validate_python_version()
+        args = parse_args(argv)
 
-        args = parse_args(
-            argv
+        print(
+            "[env] Verificando configuração do ambiente..."
+        )
+        ensure_environment()
+        print(
+            "[env] Configuração concluída."
         )
 
-        # Environment setup deliberately occurs before
-        # venv/dependency setup because configure_env.py
-        # uses only Python's standard library.
-        #
-        # Local:
-        #   prompts for token if missing.
-        #
-        # CI:
-        #   reads SCRAPE_DO_TOKEN from environment.
-        configure_environment()
+        print_execution_summary(args)
 
-        print_execution_summary(
-            args
+        docker_command = ensure_docker(
+            install_policy=docker_install_policy(args)
         )
+
+        recreate_local_parabank(
+            docker_command=docker_command,
+            base_url=settings.BASE_URL,
+            startup_timeout_seconds=(
+                settings.LOCAL_STARTUP_TIMEOUT_SECONDS
+            ),
+        )
+        environment_started = True
 
         if not args.skip_setup:
-            setup_project(
-                args.browser
-            )
+            setup_project(args.browser)
         else:
             print(
                 "[setup] --skip-setup informado; "
@@ -731,10 +606,8 @@ def main(
 
         prepare_allure_results()
 
-        runner_python = (
-            resolve_runner_python(
-                args.skip_setup
-            )
+        runner_python = resolve_runner_python(
+            args.skip_setup
         )
 
         exit_code = run_behave(
@@ -749,13 +622,11 @@ def main(
 
         if exit_code == 0:
             print(
-                "[run] Suite concluída "
-                "com sucesso."
+                "[run] Suite concluída com sucesso."
             )
         else:
             print(
-                "[run] Suite concluída "
-                "com falhas ou erros."
+                "[run] Suite concluída com falhas ou erros."
             )
 
         print(
@@ -768,25 +639,21 @@ def main(
     except KeyboardInterrupt:
         print()
         print(
-            "[run] Execução cancelada "
-            "pelo usuário."
+            "[run] Execução cancelada pelo usuário."
         )
-
         return 130
 
     except subprocess.CalledProcessError as exc:
         print()
         print(
-            "[run][ERRO] Um comando de setup "
-            "falhou."
+            "[run][ERRO] Um comando de setup falhou."
         )
         print(
             "[run][ERRO] Comando: "
             + format_command(
                 [
                     str(item)
-                    for item
-                    in exc.cmd
+                    for item in exc.cmd
                 ]
             )
         )
@@ -794,22 +661,35 @@ def main(
             "[run][ERRO] Código de saída: "
             f"{exc.returncode}"
         )
-
-        return int(
-            exc.returncode
-            or 1
-        )
+        return int(exc.returncode or 1)
 
     except Exception as exc:
         print()
         print(
             f"[run][ERRO] {exc}"
         )
-
         return 1
+
+    finally:
+        keep_environment = bool(
+            args
+            and args.keep_environment
+        )
+
+        if (
+            environment_started
+            and docker_command is not None
+            and not keep_environment
+        ):
+            stop_local_parabank(
+                docker_command
+            )
+        elif environment_started:
+            print(
+                "[environment] ParaBank local mantido ativo "
+                "(--keep-environment)."
+            )
 
 
 if __name__ == "__main__":
-    raise SystemExit(
-        main()
-    )
+    raise SystemExit(main())

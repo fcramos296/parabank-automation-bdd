@@ -1,4 +1,6 @@
+import time
 from decimal import Decimal
+from typing import Any
 
 from behave import (
     given,
@@ -9,16 +11,359 @@ from behave import (
 
 from pages.login_page import LoginPage
 from pages.transfer_page import TransferPage
-from services.parabank_api_client import (
-    AccountType,
-)
+from services.parabank_api_client import AccountType
 from utils.test_data import build_customer
+
+
+TRANSFER_SENT_DESCRIPTION = "Funds Transfer Sent"
+TRANSFER_RECEIVED_DESCRIPTION = "Funds Transfer Received"
+TRANSFER_TRANSACTION_TIMEOUT_SECONDS = 8.0
+TRANSFER_TRANSACTION_POLL_SECONDS = 0.5
+
+
+def _account_balance(
+    account: dict,
+) -> Decimal:
+    try:
+        return Decimal(
+            str(account["balance"])
+        )
+    except (
+        KeyError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise AssertionError(
+            "Unexpected account payload without a valid "
+            f"balance: {account!r}"
+        ) from exc
+
+
+def _select_source_account(
+    accounts: list[dict],
+) -> dict:
+    if not accounts:
+        raise AssertionError(
+            "The newly registered customer has no account."
+        )
+
+    try:
+        return max(
+            accounts,
+            key=lambda account: (
+                _account_balance(account),
+                int(account["id"]),
+            ),
+        )
+    except (
+        KeyError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise AssertionError(
+            "Unexpected account payload returned for the "
+            f"new customer: {accounts!r}"
+        ) from exc
+
+
+def _get_account_transactions(
+    context,
+    account_id: int,
+) -> list[dict[str, Any]]:
+    url = (
+        f"{context.api_client.bank_api_url}"
+        f"/accounts/{account_id}/transactions"
+    )
+
+    response = context.api_client.transport.request(
+        "GET",
+        url,
+        headers=context.api_client.JSON_HEADERS,
+    )
+
+    if not response.ok:
+        body = " ".join(
+            response.text.split()
+        )[:300]
+
+        raise AssertionError(
+            "Unable to retrieve transactions for "
+            f"account {account_id}. "
+            f"HTTP {response.status_code}. Body: {body}"
+        )
+
+    try:
+        transactions = response.json()
+    except ValueError as exc:
+        raise AssertionError(
+            "Transactions endpoint did not return JSON "
+            f"for account {account_id}."
+        ) from exc
+
+    if not isinstance(
+        transactions,
+        list,
+    ):
+        raise AssertionError(
+            "Unexpected transactions payload for "
+            f"account {account_id}: {transactions!r}"
+        )
+
+    return transactions
+
+
+def _transaction_ids(
+    transactions: list[dict[str, Any]],
+) -> set[int]:
+    ids: set[int] = set()
+
+    for transaction in transactions:
+        try:
+            ids.add(
+                int(transaction["id"])
+            )
+        except (
+            KeyError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            raise AssertionError(
+                "Unexpected transaction payload without a "
+                f"valid id: {transaction!r}"
+            ) from exc
+
+    return ids
+
+
+def _matches_transfer_transaction(
+    transaction: dict[str, Any],
+    *,
+    account_id: int,
+    amount: Decimal,
+    transaction_type: str,
+    description: str,
+) -> bool:
+    try:
+        transaction_amount = Decimal(
+            str(transaction["amount"])
+        )
+
+        return (
+            int(transaction["accountId"])
+            == account_id
+            and transaction_amount == amount
+            and str(transaction["type"])
+            == transaction_type
+            and str(transaction["description"])
+            == description
+        )
+    except (
+        KeyError,
+        TypeError,
+        ValueError,
+    ):
+        return False
+
+
+def _find_new_transfer_transaction(
+    transactions: list[dict[str, Any]],
+    *,
+    previous_ids: set[int],
+    account_id: int,
+    amount: Decimal,
+    transaction_type: str,
+    description: str,
+) -> dict[str, Any] | None:
+    for transaction in transactions:
+        try:
+            transaction_id = int(
+                transaction["id"]
+            )
+        except (
+            KeyError,
+            TypeError,
+            ValueError,
+        ):
+            continue
+
+        if transaction_id in previous_ids:
+            continue
+
+        if _matches_transfer_transaction(
+            transaction,
+            account_id=account_id,
+            amount=amount,
+            transaction_type=transaction_type,
+            description=description,
+        ):
+            return transaction
+
+    return None
+
+
+def _capture_transfer_state(
+    context,
+    *,
+    from_account_id: int,
+    to_account_id: int,
+) -> None:
+    context.from_account_id = from_account_id
+    context.to_account_id = to_account_id
+
+    context.from_balance_before = (
+        context.api_client.get_account_balance(
+            from_account_id
+        )
+    )
+
+    context.to_balance_before = (
+        context.api_client.get_account_balance(
+            to_account_id
+        )
+    )
+
+    source_transactions = (
+        _get_account_transactions(
+            context,
+            from_account_id,
+        )
+    )
+
+    target_transactions = (
+        _get_account_transactions(
+            context,
+            to_account_id,
+        )
+    )
+
+    context.source_transaction_ids_before = (
+        _transaction_ids(
+            source_transactions
+        )
+    )
+
+    context.target_transaction_ids_before = (
+        _transaction_ids(
+            target_transactions
+        )
+    )
+
+
+def _execute_transfer(
+    context,
+    *,
+    amount: str,
+    from_account_id: int,
+    to_account_id: int,
+) -> None:
+    _capture_transfer_state(
+        context,
+        from_account_id=from_account_id,
+        to_account_id=to_account_id,
+    )
+
+    context.transferred_amount = Decimal(
+        amount
+    )
+
+    context.transferred_amount_display = amount
+
+    context.transfer_page.transfer(
+        amount=amount,
+        from_account_id=from_account_id,
+        to_account_id=to_account_id,
+    )
+
+
+def _wait_for_transfer_transactions(
+    context,
+) -> None:
+    deadline = (
+        time.monotonic()
+        + TRANSFER_TRANSACTION_TIMEOUT_SECONDS
+    )
+
+    last_source_transactions: list[
+        dict[str, Any]
+    ] = []
+
+    last_target_transactions: list[
+        dict[str, Any]
+    ] = []
+
+    while time.monotonic() < deadline:
+        last_source_transactions = (
+            _get_account_transactions(
+                context,
+                context.from_account_id,
+            )
+        )
+
+        last_target_transactions = (
+            _get_account_transactions(
+                context,
+                context.to_account_id,
+            )
+        )
+
+        debit = _find_new_transfer_transaction(
+            last_source_transactions,
+            previous_ids=(
+                context.source_transaction_ids_before
+            ),
+            account_id=context.from_account_id,
+            amount=context.transferred_amount,
+            transaction_type="Debit",
+            description=TRANSFER_SENT_DESCRIPTION,
+        )
+
+        credit = _find_new_transfer_transaction(
+            last_target_transactions,
+            previous_ids=(
+                context.target_transaction_ids_before
+            ),
+            account_id=context.to_account_id,
+            amount=context.transferred_amount,
+            transaction_type="Credit",
+            description=TRANSFER_RECEIVED_DESCRIPTION,
+        )
+
+        if (
+            debit is not None
+            and credit is not None
+        ):
+            context.transfer_debit = debit
+            context.transfer_credit = credit
+            return
+
+        time.sleep(
+            TRANSFER_TRANSACTION_POLL_SECONDS
+        )
+
+    source_new_ids = sorted(
+        _transaction_ids(last_source_transactions)
+        - context.source_transaction_ids_before
+    )
+
+    target_new_ids = sorted(
+        _transaction_ids(last_target_transactions)
+        - context.target_transaction_ids_before
+    )
+
+    raise AssertionError(
+        "The UI reported a successful transfer, but the "
+        "expected new Debit/Credit records were not observed. "
+        f"Source account: {context.from_account_id}. "
+        f"Target account: {context.to_account_id}. "
+        f"Amount: {context.transferred_amount}. "
+        f"New source transaction ids: {source_new_ids}. "
+        f"New target transaction ids: {target_new_ids}."
+    )
 
 
 @given(
     "que estou autenticado com um usuário "
-    "provisionado via backend e possuo "
-    "duas contas"
+    "exclusivo e possuo duas contas"
 )
 def step_auth_with_two_accounts(
     context,
@@ -44,62 +389,33 @@ def step_auth_with_two_accounts(
         customer_data["id"]
     )
 
-    context.transfer_customer_id = (
-        customer_id
-    )
+    context.transfer_customer_id = customer_id
 
-    accounts = (
-        context.api_client
-        .get_customer_accounts(
+    existing_accounts = (
+        context.api_client.get_customer_accounts(
             customer_id
         )
     )
 
-    assert accounts, (
-        "The provisioned customer "
-        "has no account."
+    source_account = _select_source_account(
+        existing_accounts
     )
 
-    context.from_account_id = int(
-        accounts[0]["id"]
+    primary_account_id = int(
+        source_account["id"]
     )
 
-    target_account = (
+    secondary_account = (
         context.api_client.create_account(
             customer_id=customer_id,
-            account_type=(
-                AccountType.SAVINGS
-            ),
-            from_account_id=(
-                context.from_account_id
-            ),
+            account_type=AccountType.SAVINGS,
+            from_account_id=primary_account_id,
         )
     )
 
-    context.to_account_id = int(
-        target_account["id"]
-    )
-
-    assert (
-        context.from_account_id
-        != context.to_account_id
-    ), (
-        "Transfer setup must use "
-        "two different accounts."
-    )
-
-    context.from_balance_before = (
-        context.api_client
-        .get_account_balance(
-            context.from_account_id
-        )
-    )
-
-    context.to_balance_before = (
-        context.api_client
-        .get_account_balance(
-            context.to_account_id
-        )
+    context.primary_account_id = primary_account_id
+    context.secondary_account_id = int(
+        secondary_account["id"]
     )
 
     login_page = LoginPage(
@@ -114,6 +430,39 @@ def step_auth_with_two_accounts(
     )
 
     login_page.validate_login_success()
+
+
+@given(
+    "que existe uma conta pertencente "
+    "a outro cliente"
+)
+def step_create_foreign_account(
+    context,
+) -> None:
+    foreign_customer = build_customer(
+        "foreign"
+    )
+
+    context.api_client.register_user(
+        foreign_customer.registration_payload()
+    )
+
+    persisted = (
+        context.api_client.login_customer(
+            foreign_customer.username,
+            foreign_customer.password,
+        )
+    )
+
+    foreign_accounts = (
+        context.api_client.get_customer_accounts(
+            int(persisted["id"])
+        )
+    )
+
+    context.foreign_account_id = int(
+        foreign_accounts[0]["id"]
+    )
 
 
 @given(
@@ -138,18 +487,50 @@ def step_transfer_funds(
     context,
     amount: str,
 ) -> None:
-    context.transferred_amount = Decimal(
-        amount
+    _execute_transfer(
+        context,
+        amount=amount,
+        from_account_id=context.primary_account_id,
+        to_account_id=context.secondary_account_id,
     )
 
-    context.transfer_page.transfer(
+
+@when(
+    'realizo a transferência da quantia '
+    'de "{amount}" da segunda conta para a primeira'
+)
+def step_transfer_reverse_direction(
+    context,
+    amount: str,
+) -> None:
+    _execute_transfer(
+        context,
         amount=amount,
-        from_account_id=(
-            context.from_account_id
-        ),
-        to_account_id=(
-            context.to_account_id
-        ),
+        from_account_id=context.secondary_account_id,
+        to_account_id=context.primary_account_id,
+    )
+
+
+@when(
+    "transfiro todo o saldo disponível "
+    "da conta de origem"
+)
+def step_transfer_full_balance(
+    context,
+) -> None:
+    source_balance = (
+        context.api_client.get_account_balance(
+            context.primary_account_id
+        )
+    )
+
+    amount = f"{source_balance:.2f}"
+
+    _execute_transfer(
+        context,
+        amount=amount,
+        from_account_id=context.primary_account_id,
+        to_account_id=context.secondary_account_id,
     )
 
 
@@ -162,16 +543,37 @@ def step_assert_transfer_success(
     context,
     amount: str,
 ) -> None:
-    context.transfer_page\
-        .validate_transfer_success(
-            expected_amount=amount,
-            from_account_id=(
-                context.from_account_id
-            ),
-            to_account_id=(
-                context.to_account_id
-            ),
-        )
+    context.transfer_page.validate_transfer_success(
+        expected_amount=amount,
+        from_account_id=context.from_account_id,
+        to_account_id=context.to_account_id,
+    )
+
+
+@then(
+    "a transferência do saldo total deve "
+    "ser concluída entre as contas"
+)
+def step_assert_full_balance_transfer_success(
+    context,
+) -> None:
+    context.transfer_page.validate_transfer_success(
+        expected_amount=context.transferred_amount_display,
+        from_account_id=context.from_account_id,
+        to_account_id=context.to_account_id,
+    )
+
+
+@then(
+    "os lançamentos de débito e crédito devem "
+    "registrar a transferência"
+)
+def step_assert_transfer_transactions(
+    context,
+) -> None:
+    _wait_for_transfer_transactions(
+        context
+    )
 
 
 @then(
@@ -191,25 +593,55 @@ def step_assert_balances_after_transfer(
         + context.transferred_amount
     )
 
-    context.api_client\
-        .wait_for_account_balance(
-            account_id=(
-                context.from_account_id
-            ),
-            expected_balance=(
-                expected_from
-            ),
+    context.api_client.wait_for_account_balance(
+        account_id=context.from_account_id,
+        expected_balance=expected_from,
+    )
+
+    context.api_client.wait_for_account_balance(
+        account_id=context.to_account_id,
+        expected_balance=expected_to,
+    )
+
+
+@then(
+    "a conta de origem deve ficar "
+    "com saldo zero"
+)
+def step_assert_source_balance_zero(
+    context,
+) -> None:
+    balance = (
+        context.api_client.get_account_balance(
+            context.from_account_id
+        )
+    )
+
+    if balance != Decimal("0.00"):
+        raise AssertionError(
+            "Source account should have zero balance after "
+            f"the full-balance transfer. Actual: {balance}."
         )
 
-    context.api_client\
-        .wait_for_account_balance(
-            account_id=(
-                context.to_account_id
-            ),
-            expected_balance=(
-                expected_to
-            ),
-        )
+
+@then(
+    "os seletores devem listar somente "
+    "as contas do cliente autenticado"
+)
+def step_assert_only_customer_accounts_visible(
+    context,
+) -> None:
+    expected_accounts = {
+        context.primary_account_id,
+        context.secondary_account_id,
+    }
+
+    context.transfer_page.validate_account_options(
+        expected_account_ids=expected_accounts,
+        forbidden_account_ids={
+            context.foreign_account_id
+        },
+    )
 
 
 use_step_matcher("re")
@@ -223,14 +655,16 @@ def step_attempt_invalid_transfer(
     context,
     amount: str,
 ) -> None:
+    _capture_transfer_state(
+        context,
+        from_account_id=context.primary_account_id,
+        to_account_id=context.secondary_account_id,
+    )
+
     context.transfer_page.transfer(
         amount=amount,
-        from_account_id=(
-            context.from_account_id
-        ),
-        to_account_id=(
-            context.to_account_id
-        ),
+        from_account_id=context.from_account_id,
+        to_account_id=context.to_account_id,
     )
 
 
@@ -245,10 +679,9 @@ def step_assert_transfer_error(
     context,
     message: str,
 ) -> None:
-    context.transfer_page\
-        .validate_transfer_error(
-            message
-        )
+    context.transfer_page.validate_transfer_error(
+        message
+    )
 
 
 @then(
@@ -258,22 +691,56 @@ def step_assert_transfer_error(
 def step_assert_balances_unchanged(
     context,
 ) -> None:
-    context.api_client\
-        .wait_for_account_balance(
-            account_id=(
-                context.from_account_id
-            ),
-            expected_balance=(
-                context.from_balance_before
-            ),
+    context.api_client.wait_for_account_balance(
+        account_id=context.from_account_id,
+        expected_balance=context.from_balance_before,
+    )
+
+    context.api_client.wait_for_account_balance(
+        account_id=context.to_account_id,
+        expected_balance=context.to_balance_before,
+    )
+
+
+@then(
+    "nenhuma transação deve ser criada "
+    "para a tentativa rejeitada"
+)
+def step_assert_no_transaction_created(
+    context,
+) -> None:
+    source_ids_after = _transaction_ids(
+        _get_account_transactions(
+            context,
+            context.from_account_id,
+        )
+    )
+
+    target_ids_after = _transaction_ids(
+        _get_account_transactions(
+            context,
+            context.to_account_id,
+        )
+    )
+
+    if (
+        source_ids_after
+        != context.source_transaction_ids_before
+    ):
+        raise AssertionError(
+            "Rejected transfer created or changed a source "
+            "account transaction. "
+            f"Before: {sorted(context.source_transaction_ids_before)}. "
+            f"After: {sorted(source_ids_after)}."
         )
 
-    context.api_client\
-        .wait_for_account_balance(
-            account_id=(
-                context.to_account_id
-            ),
-            expected_balance=(
-                context.to_balance_before
-            ),
+    if (
+        target_ids_after
+        != context.target_transaction_ids_before
+    ):
+        raise AssertionError(
+            "Rejected transfer created or changed a target "
+            "account transaction. "
+            f"Before: {sorted(context.target_transaction_ids_before)}. "
+            f"After: {sorted(target_ids_after)}."
         )

@@ -3,6 +3,7 @@ from uuid import uuid4
 
 
 DEFAULT_PASSWORD = "Password123!"
+MAX_CREDENTIAL_LENGTH = 20
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +60,38 @@ def unique_username(
     )[:8] or "qa"
 
     return f"{safe_prefix}_{uuid4().hex[:10]}"
+
+
+def unique_username_exact(
+    length: int,
+    prefix: str = "qa",
+) -> str:
+    if length < 1:
+        raise ValueError(
+            "Username length must be greater than zero."
+        )
+
+    if length > MAX_CREDENTIAL_LENGTH:
+        raise ValueError(
+            "Username length cannot exceed the ParaBank "
+            f"credential limit of {MAX_CREDENTIAL_LENGTH}."
+        )
+
+    safe_prefix = "".join(
+        char
+        for char in prefix.lower()
+        if char.isalnum()
+    ) or "qa"
+
+    seed = (
+        safe_prefix
+        + uuid4().hex
+    )
+
+    if len(seed) < length:
+        seed += uuid4().hex
+
+    return seed[:length]
 
 
 def unique_ssn() -> str:

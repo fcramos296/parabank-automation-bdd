@@ -103,6 +103,63 @@ class TransferPage(BasePage):
             .nth(1)
         ).to_be_attached()
 
+    @staticmethod
+    def _option_values(select) -> set[int]:
+        options = select.locator("option")
+        values: set[int] = set()
+
+        for index in range(options.count()):
+            value = options.nth(index).get_attribute(
+                "value"
+            )
+
+            if value is None or not value.strip():
+                continue
+
+            values.add(int(value))
+
+        return values
+
+    def validate_account_options(
+        self,
+        expected_account_ids: set[int],
+        forbidden_account_ids: set[int] | None = None,
+    ) -> None:
+        from_values = self._option_values(
+            self.from_account_select
+        )
+
+        to_values = self._option_values(
+            self.to_account_select
+        )
+
+        if from_values != expected_account_ids:
+            raise AssertionError(
+                "Unexpected source-account options. "
+                f"Expected: {sorted(expected_account_ids)}. "
+                f"Actual: {sorted(from_values)}."
+            )
+
+        if to_values != expected_account_ids:
+            raise AssertionError(
+                "Unexpected target-account options. "
+                f"Expected: {sorted(expected_account_ids)}. "
+                f"Actual: {sorted(to_values)}."
+            )
+
+        forbidden = forbidden_account_ids or set()
+
+        exposed = (
+            from_values | to_values
+        ) & forbidden
+
+        if exposed:
+            raise AssertionError(
+                "Transfer selectors exposed accounts that do "
+                "not belong to the authenticated customer: "
+                f"{sorted(exposed)}"
+            )
+
     def transfer(
         self,
         amount: str,
