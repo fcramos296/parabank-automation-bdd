@@ -91,6 +91,8 @@ jobs:
 
           echo "scope=${scope}" >> "$GITHUB_OUTPUT"
           echo "browser=${browser}" >> "$GITHUB_OUTPUT"
+          echo "ALLURE_SCOPE=${scope}" >> "$GITHUB_ENV"
+          echo "ALLURE_BROWSER=${browser}" >> "$GITHUB_ENV"
 
           echo "============================================"
           echo "Regression configuration"
@@ -139,7 +141,7 @@ jobs:
       - name: Install Allure Report
         shell: bash
         run: |
-          npm install -g allure
+          npm install -g allure@3.17.0
           allure --version
 
       - name: Run regression
@@ -186,7 +188,7 @@ jobs:
           # Mantém o job vivo para publicar as evidências mesmo em falha.
           exit 0
 
-      - name: Generate Allure Report
+      - name: Generate branded Allure Report
         id: allure
         if: always()
         shell: bash
@@ -202,6 +204,7 @@ jobs:
 
           allure generate \
             reports/allure-results \
+            --config ./allurerc.mjs \
             --output reports/allure-report
 
           test -f reports/allure-report/index.html
@@ -216,13 +219,13 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-      - name: Upload Allure HTML Report
+      - name: Upload branded Allure HTML Report
         if: >
           always() &&
           steps.allure.outputs.generated == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: allure-report-${{ github.run_number }}-${{ steps.execution.outputs.browser }}
+          name: topaz-allure-report-${{ github.run_number }}-${{ steps.execution.outputs.browser }}
           path: reports/allure-report
           if-no-files-found: error
           retention-days: 14
@@ -315,6 +318,9 @@ jobs:
 
       - name: Run smoke suite
         shell: bash
+        env:
+          ALLURE_SCOPE: smoke
+          ALLURE_BROWSER: ${{ matrix.browser }}
         run: |
           python scripts/run.py \
             --skip-setup \
