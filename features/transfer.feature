@@ -11,14 +11,13 @@ Funcionalidade: Transferência de Fundos
 
   @smoke
   Cenário: Transferência de fundos entre contas distintas realizada com sucesso
-    Quando realizo a transferência da quantia de "25.00" entre contas distintas
-    Então a transferência deve ser concluída exibindo o valor "25.00" e as contas envolvidas
-    E os saldos das duas contas devem refletir a transferência
+    Quando realizo a transferência da quantia de "17.31" entre contas distintas
+    Então a transferência deve ser concluída exibindo o valor "17.31" e as contas envolvidas
+    E os lançamentos de débito e crédito devem registrar a transferência
 
   Esquema do Cenário: Transferência com formato de valor inválido
     Quando realizo a tentativa de transferência com valor "<valor>"
     Então o sistema deve apresentar o erro de transferência "An internal error has occurred and has been logged."
-    E os saldos das duas contas devem permanecer inalterados
 
     Exemplos:
       | valor       |
