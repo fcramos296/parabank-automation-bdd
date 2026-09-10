@@ -48,9 +48,26 @@ class LoginPage(BasePage):
             )
         )
 
+    @property
+    def visible_error_message(self):
+        return self.page.locator(
+            "p.error:visible"
+        ).first
+
     def open(self) -> None:
+        """
+        Opens the login page from an explicitly
+        unauthenticated server-side session.
+
+        ParaBank's public instance is shared and has
+        demonstrated inconsistent session state between
+        requests. Visiting logout.htm first invalidates any
+        session that may already exist for this browser
+        context and redirects back to index.htm.
+        """
+
         self.navigate_to(
-            "index.htm"
+            "logout.htm"
         )
 
         expect(
@@ -60,6 +77,10 @@ class LoginPage(BasePage):
         expect(
             self.password_input
         ).to_be_visible()
+
+        expect(
+            self.logout_link
+        ).not_to_be_visible()
 
     def login(
         self,
@@ -80,8 +101,8 @@ class LoginPage(BasePage):
         self,
     ) -> None:
         """
-        Valida autenticação sem depender do carregamento
-        do serviço Accounts Overview.
+        Validates authentication without depending on
+        account-table contents or a specific balance.
         """
 
         expect(
@@ -103,33 +124,46 @@ class LoginPage(BasePage):
         expected_message: str,
     ) -> None:
         expect(
-            self.error_message.first
+            self.visible_error_message
         ).to_be_visible()
 
         expect(
-            self.error_message.first
+            self.visible_error_message
         ).to_contain_text(
             expected_message
         )
+
+        expect(
+            self.username_input
+        ).to_be_visible()
+
+        expect(
+            self.logout_link
+        ).not_to_be_visible()
 
     def validate_unauthenticated_with_error(
         self,
     ) -> None:
         """
-        Valida que a tentativa de autenticação inválida
-        produziu uma resposta de erro.
+        Confirms that invalid credentials leave the user
+        unauthenticated and that the application presents
+        a visible error response.
 
-        O ambiente público do ParaBank pode renderizar
-        elementos inconsistentes do menu lateral, inclusive
-        o link Log Out, mesmo após uma tentativa inválida.
-        Por isso o estado negativo é validado pelo retorno
-        explícito de erro da aplicação.
+        Hidden template errors are intentionally ignored.
         """
 
         expect(
-            self.error_message.first
+            self.visible_error_message
         ).to_be_visible()
 
         expect(
-            self.error_message.first
+            self.visible_error_message
         ).not_to_have_text("")
+
+        expect(
+            self.username_input
+        ).to_be_visible()
+
+        expect(
+            self.logout_link
+        ).not_to_be_visible()
