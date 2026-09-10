@@ -91,8 +91,6 @@ jobs:
 
           echo "scope=${scope}" >> "$GITHUB_OUTPUT"
           echo "browser=${browser}" >> "$GITHUB_OUTPUT"
-          echo "ALLURE_SCOPE=${scope}" >> "$GITHUB_ENV"
-          echo "ALLURE_BROWSER=${browser}" >> "$GITHUB_ENV"
 
           echo "============================================"
           echo "Regression configuration"
@@ -202,10 +200,28 @@ jobs:
 
           rm -rf reports/allure-report
 
+          set +e
           allure generate \
             reports/allure-results \
-            --config ./allurerc.mjs \
+            --config ./allurerc.yml \
             --output reports/allure-report
+          allure_exit_code=$?
+          set -e
+
+          if [[ "$allure_exit_code" != "0" ]]; then
+            echo "generated=false" >> "$GITHUB_OUTPUT"
+            echo "::error::Allure report generation failed with exit code ${allure_exit_code}."
+
+            latest_log="$(ls -1t "$HOME"/.allure/logs/*.log 2>/dev/null | head -n 1 || true)"
+
+            if [[ -n "$latest_log" ]]; then
+              echo "::group::Allure diagnostic log"
+              cat "$latest_log"
+              echo "::endgroup::"
+            fi
+
+            exit "$allure_exit_code"
+          fi
 
           test -f reports/allure-report/index.html
           echo "generated=true" >> "$GITHUB_OUTPUT"
@@ -318,9 +334,6 @@ jobs:
 
       - name: Run smoke suite
         shell: bash
-        env:
-          ALLURE_SCOPE: smoke
-          ALLURE_BROWSER: ${{ matrix.browser }}
         run: |
           python scripts/run.py \
             --skip-setup \
