@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="https://raw.githubusercontent.com/fcramos296/parabank-automation-bdd/4d402e0ae24f6fa958b4618e720084b0d0969dfb/assets/topaz-readme.jpeg" alt="Topaz | Stefanini" width="334" />
-</p>
-
 <h1 align="center">ParaBank Automation BDD</h1>
 
 <p align="center">
@@ -69,7 +65,7 @@ A automação segue uma separação clara de responsabilidades:
 pré-condição técnica      → API / backend
 comportamento do usuário  → UI / Playwright
 efeito persistido         → API / backend
-evidência                  → Allure
+evidência                 → Allure
 ```
 
 Isso evita executar pela interface etapas que não são o comportamento em teste e reduz tempo, acoplamento e flakiness.
@@ -161,8 +157,6 @@ nenhuma transação criada
 ├── .github/
 │   └── workflows/
 │       └── e2e.yml
-├── assets/
-│   └── topaz-readme.jpeg
 ├── config/
 │   └── settings.py
 ├── features/
