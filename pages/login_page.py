@@ -96,6 +96,15 @@ class LoginPage(BasePage):
 
         self.login_button.click()
 
+    def reload_authenticated_page(self) -> None:
+        expect(
+            self.logout_link
+        ).to_be_visible()
+
+        self.page.reload(
+            wait_until="domcontentloaded"
+        )
+
     def logout(self) -> None:
         expect(
             self.logout_link
