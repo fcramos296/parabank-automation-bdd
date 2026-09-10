@@ -36,7 +36,7 @@ on:
 
 concurrency:
   group: parabank-e2e-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 
 permissions:
@@ -48,34 +48,18 @@ permissions:
 
 env:
   PYTHONUNBUFFERED: "1"
-
-  BASE_URL: "https://parabank.parasoft.com/parabank"
-
-  HEADLESS: "true"
-
+  LOCAL_BASE_URL: "http://localhost:8080/parabank"
+  LOCAL_STARTUP_TIMEOUT_SECONDS: "180"
   PW_TIMEOUT_MS: "10000"
   PW_NAVIGATION_TIMEOUT_MS: "15000"
-
-  # O ambiente remoto pode responder mais lentamente que o local.
   REQUEST_TIMEOUT_SECONDS: "30"
-
-  BACKEND_TRANSPORT: "proxy"
-  BROWSER_TRANSPORT: "direct"
-
   BLOCK_NONESSENTIAL_RESOURCES: "true"
-  UI_SCENARIO_DELAY_SECONDS: "2.0"
-
-  SCRAPE_DO_API_URL: "https://api.scrape.do/"
-  SCRAPE_DO_PROXY_URL: "http://proxy.scrape.do:8080"
-  SCRAPE_DO_BROWSER_PROXY_PARAMS: "render=false"
-
-  SCRAPE_DO_TOKEN: ${{ secrets.SCRAPE_DO_TOKEN }}
+  UI_SCENARIO_DELAY_SECONDS: "0"
 
 
 jobs:
-
-  test:
-    name: E2E Tests
+  regression:
+    name: Regression Quality Gate
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -83,10 +67,8 @@ jobs:
       pages_ready: ${{ steps.pages_upload.outcome }}
 
     steps:
-
       - name: Checkout repository
         uses: actions/checkout@v7
-
 
       - name: Setup Python
         uses: actions/setup-python@v7
@@ -95,36 +77,12 @@ jobs:
           cache: "pip"
           cache-dependency-path: requirements.txt
 
-
-      - name: Validate SCRAPE_DO_TOKEN
-        shell: bash
-        run: |
-          if [[ -z "${SCRAPE_DO_TOKEN}" ]]; then
-            echo "::error::SCRAPE_DO_TOKEN is not configured."
-            echo "::error::Configure the repository secret SCRAPE_DO_TOKEN."
-            exit 1
-          fi
-
-          echo "SCRAPE_DO_TOKEN is configured."
-          echo "The secret value will not be displayed."
-
-
       - name: Resolve execution configuration
         id: execution
         shell: bash
         run: |
           scope="full"
           browser="chromium"
-
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            scope="smoke"
-            browser="chromium"
-          fi
-
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            scope="full"
-            browser="chromium"
-          fi
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             scope="${{ inputs.scope }}"
@@ -134,16 +92,21 @@ jobs:
           echo "scope=${scope}" >> "$GITHUB_OUTPUT"
           echo "browser=${browser}" >> "$GITHUB_OUTPUT"
 
-          echo
           echo "============================================"
-          echo "Execution configuration"
+          echo "Regression configuration"
           echo "============================================"
           echo "Event   : ${{ github.event_name }}"
           echo "Scope   : ${scope}"
           echo "Browser : ${browser}"
+          echo "SUT     : local Docker ParaBank"
           echo "============================================"
-          echo
 
+      - name: Verify Docker runtime
+        shell: bash
+        run: |
+          docker --version
+          docker info
+          docker compose version
 
       - name: Install Python dependencies
         shell: bash
@@ -151,38 +114,35 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
+      - name: Validate Python source syntax
+        shell: bash
+        run: |
+          python -m compileall \
+            config \
+            features \
+            pages \
+            scripts \
+            services \
+            utils
 
       - name: Install Playwright browser
         shell: bash
         run: |
           browser="${{ steps.execution.outputs.browser }}"
-
-          echo "Installing Playwright browser: ${browser}"
-
-          python -m playwright install \
-            --with-deps \
-            "${browser}"
-
+          python -m playwright install --with-deps "$browser"
 
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version: "24"
 
-
       - name: Install Allure Report
         shell: bash
         run: |
-          echo "Installing Allure Report..."
-
           npm install -g allure
-
-          echo
-          echo "Allure version:"
           allure --version
 
-
-      - name: Run automated tests
+      - name: Run regression
         id: tests
         shell: bash
         run: |
@@ -191,105 +151,52 @@ jobs:
 
           args=(
             --skip-setup
+            --no-docker-install
             --browser "$browser"
           )
 
           case "$scope" in
-
             smoke)
-              args+=(
-                --tags
-                "@smoke"
-              )
+              args+=(--tags "@smoke")
               ;;
-
             login)
-              args+=(
-                --scope
-                login
-              )
+              args+=(--scope login)
               ;;
-
             registration)
-              args+=(
-                --scope
-                registration
-              )
+              args+=(--scope registration)
               ;;
-
             transfer)
-              args+=(
-                --scope
-                transfer
-              )
+              args+=(--scope transfer)
               ;;
-
             full)
               ;;
-
             *)
               echo "::error::Unknown test scope: $scope"
               exit 1
               ;;
           esac
 
-          echo
-          echo "============================================"
-          echo "Running ParaBank Automation"
-          echo "============================================"
-          echo "Scope   : $scope"
-          echo "Browser : $browser"
-          echo "Mode    : headless"
-          echo "============================================"
-          echo
-
           set +e
-
           python scripts/run.py "${args[@]}"
-
           test_exit_code=$?
-
           set -e
 
           echo "exit_code=${test_exit_code}" >> "$GITHUB_OUTPUT"
 
-          echo
-          echo "============================================"
-          echo "Test execution finished"
-          echo "Exit code: ${test_exit_code}"
-          echo "============================================"
-          echo
-
-          # Mantém o workflow vivo para gerar evidências.
+          # Mantém o job vivo para publicar as evidências mesmo em falha.
           exit 0
-
 
       - name: Generate Allure Report
         id: allure
         if: always()
         shell: bash
         run: |
-          echo "Checking Allure results..."
-
-          if [[ ! -d "reports/allure-results" ]]; then
-            echo "No allure-results directory found."
+          if [[ ! -d "reports/allure-results" ]] || \
+             ! find reports/allure-results -type f -print -quit | grep -q .; then
             echo "generated=false" >> "$GITHUB_OUTPUT"
+            echo "No Allure results were produced."
             exit 0
           fi
-
-          if ! find reports/allure-results \
-              -type f \
-              -print \
-              -quit | grep -q .; then
-
-            echo "No Allure result files found."
-            echo "generated=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          echo
-          echo "Generating Allure Report..."
-          echo
 
           rm -rf reports/allure-report
 
@@ -297,32 +204,17 @@ jobs:
             reports/allure-results \
             --output reports/allure-report
 
-          if [[ ! -f "reports/allure-report/index.html" ]]; then
-            echo "::error::Allure Report was not generated correctly."
-            echo "generated=false" >> "$GITHUB_OUTPUT"
-            exit 1
-          fi
-
+          test -f reports/allure-report/index.html
           echo "generated=true" >> "$GITHUB_OUTPUT"
-
-          echo
-          echo "============================================"
-          echo "Allure Report generated successfully"
-          echo "============================================"
-          echo "Results: reports/allure-results"
-          echo "Report : reports/allure-report"
-          echo "============================================"
-
 
       - name: Upload Allure results
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: allure-results-${{ github.run_number }}
+          name: allure-results-${{ github.run_number }}-${{ steps.execution.outputs.browser }}
           path: reports/allure-results
           if-no-files-found: warn
           retention-days: 7
-
 
       - name: Upload Allure HTML Report
         if: >
@@ -330,16 +222,11 @@ jobs:
           steps.allure.outputs.generated == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: allure-report-${{ github.run_number }}
+          name: allure-report-${{ github.run_number }}-${{ steps.execution.outputs.browser }}
           path: reports/allure-report
           if-no-files-found: error
           retention-days: 14
 
-
-      # GitHub Pages é opcional.
-      #
-      # Caso ainda não esteja habilitado em Settings -> Pages,
-      # este step pode falhar sem derrubar o CI.
       - name: Configure GitHub Pages
         id: pages_config
         continue-on-error: true
@@ -349,18 +236,6 @@ jobs:
           github.ref == 'refs/heads/main' &&
           steps.allure.outputs.generated == 'true'
         uses: actions/configure-pages@v6
-
-
-      - name: Warn when GitHub Pages is unavailable
-        if: >
-          always() &&
-          steps.pages_config.outcome == 'failure'
-        shell: bash
-        run: |
-          echo "::warning::GitHub Pages is not enabled for this repository."
-          echo "::warning::Go to Settings > Pages and select GitHub Actions as Source."
-          echo "The Allure Report is still available as a workflow artifact."
-
 
       - name: Upload GitHub Pages artifact
         id: pages_upload
@@ -374,8 +249,7 @@ jobs:
         with:
           path: reports/allure-report
 
-
-      - name: Final test status
+      - name: Final regression status
         if: always()
         shell: bash
         run: |
@@ -387,31 +261,90 @@ jobs:
           fi
 
           if [[ "$test_exit_code" != "0" ]]; then
-            echo
-            echo "::error::Automated tests failed."
-            echo "Behave exit code: $test_exit_code"
-            echo
-
+            echo "::error::Regression failed with exit code ${test_exit_code}."
             exit "$test_exit_code"
           fi
 
-          echo
-          echo "============================================"
-          echo "Automated tests passed successfully."
-          echo "============================================"
+          echo "Regression quality gate passed."
+
+
+  cross-browser-smoke:
+    name: Smoke - ${{ matrix.browser }}
+    if: >
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    strategy:
+      fail-fast: false
+      matrix:
+        browser:
+          - firefox
+          - webkit
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Verify Docker runtime
+        shell: bash
+        run: |
+          docker info
+          docker compose version
+
+      - name: Install Python dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Install Playwright browser
+        shell: bash
+        run: |
+          python -m playwright install \
+            --with-deps \
+            "${{ matrix.browser }}"
+
+      - name: Run smoke suite
+        shell: bash
+        run: |
+          python scripts/run.py \
+            --skip-setup \
+            --no-docker-install \
+            --browser "${{ matrix.browser }}" \
+            --tags "@smoke"
+
+      - name: Upload smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-${{ matrix.browser }}-${{ github.run_number }}
+          path: reports/allure-results
+          if-no-files-found: warn
+          retention-days: 7
 
 
   deploy-report:
     name: Publish Allure Report
-
     needs:
-      - test
+      - regression
+      - cross-browser-smoke
 
     if: >
       always() &&
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main' &&
-      needs.test.outputs.pages_ready == 'success'
+      needs.regression.result == 'success' &&
+      needs.cross-browser-smoke.result == 'success' &&
+      needs.regression.outputs.pages_ready == 'success'
 
     runs-on: ubuntu-latest
 
@@ -420,7 +353,6 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-
       - name: Deploy Allure Report to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
