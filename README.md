@@ -14,6 +14,7 @@
   <img src="https://img.shields.io/badge/BDD-Behave-6A5ACD" alt="Behave BDD" />
   <img src="https://img.shields.io/badge/Docker-Local-2496ED?logo=docker&logoColor=white" alt="Docker" />
   <img src="https://img.shields.io/badge/Allure-Report-FF6A00" alt="Allure Report" />
+  <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License" />
 </p>
 
 ---
@@ -23,6 +24,8 @@
 Este projeto automatiza os fluxos de **Login/Logout**, **Registro de Usuário** e **Transferência de Fundos** do ParaBank.
 
 A solução foi estruturada como um framework de automação sustentável, com isolamento de dados, pré-condições via API, validação de efeitos persistidos, Page Object Model, ambiente reproduzível e quality gates em CI/CD.
+
+O repositório foi desenvolvido como **desafio técnico / projeto de demonstração de práticas de QA Automation**, priorizando decisões que seriam defensáveis em um contexto real: isolamento, determinismo, rastreabilidade, separação de responsabilidades, documentação de defeitos conhecidos e feedback confiável no pipeline.
 
 ### ✨ Destaques
 
@@ -52,7 +55,7 @@ A solução foi estruturada como um framework de automação sustentável, com i
 | **Requests** | Setup e validações de backend |
 | **Pydantic Settings** | Configuração do ambiente e timeouts |
 | **Docker / Compose** | Ambiente ParaBank descartável |
-| **Ruff** | Análise estática |
+| **Ruff** | Análise estática e formatação |
 | **Allure Report** | Evidências e relatório HTML |
 | **GitHub Actions** | CI/CD e quality gates |
 
@@ -189,6 +192,7 @@ Os exemplos de entrada monetária inválida são marcados com `@known_defect` po
 │   └── test_data.py
 ├── behave.ini
 ├── compose.yaml
+├── LICENSE
 ├── pyproject.toml
 ├── requirements.txt
 ├── run_tests.bat
@@ -367,7 +371,7 @@ checkout
   ↓
 Python 3.12
   ↓
-Ruff
+Ruff lint + format check
   ↓
 behave --dry-run
   ↓
@@ -418,7 +422,7 @@ O job de execução de testes possui apenas permissões de leitura. `pages: writ
 - janela de estabilização para assertions negativas;
 - ambiente determinístico e descartável;
 - auto-wait e assertions do Playwright;
-- Ruff e dry-run de BDD no CI;
+- Ruff lint + format check e dry-run de BDD no CI;
 - evidências automáticas;
 - execução reproduzível local/CI.
 
@@ -435,6 +439,14 @@ Regressão completa esperada:
 ```
 
 O número de steps pode evoluir conforme refatorações internas sem alterar a cobertura funcional declarada.
+
+---
+
+## 📄 Licença
+
+Este projeto está licenciado sob a **MIT License**. Consulte o arquivo [`LICENSE`](LICENSE) para os termos completos.
+
+O ParaBank é um sistema de demonstração da Parasoft e permanece sujeito aos termos aplicáveis do respectivo fornecedor. A licença deste repositório se aplica ao código de automação e aos artefatos produzidos neste projeto.
 
 ---
 
