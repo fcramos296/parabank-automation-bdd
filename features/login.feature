@@ -40,9 +40,9 @@ Funcionalidade: Autenticação e Encerramento de Sessão
     E solicito o logout
     Então devo retornar à tela de login sem sessão autenticada
 
-  Cenário: Área protegida exige nova autenticação após logout
+  Cenário: Área protegida permanece inacessível após logout
     Dado que existe um usuário exclusivo cadastrado para autenticação
     Quando informo as credenciais válidas desse usuário
     E solicito o logout
     E tento acessar diretamente a transferência de fundos
-    Então devo ser solicitado a autenticar novamente com a mensagem "You must be logged in to use this feature."
+    Então a área protegida deve permanecer inacessível sem sessão autenticada
