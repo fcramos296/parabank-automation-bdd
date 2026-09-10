@@ -97,6 +97,29 @@ class LoginPage(BasePage):
 
         self.login_button.click()
 
+    def logout(self) -> None:
+        expect(
+            self.logout_link
+        ).to_be_visible()
+
+        self.logout_link.click()
+
+        expect(
+            self.username_input
+        ).to_be_visible()
+
+        expect(
+            self.password_input
+        ).to_be_visible()
+
+    def open_protected_area(
+        self,
+        path: str,
+    ) -> None:
+        self.navigate_to(
+            path
+        )
+
     def validate_login_success(
         self,
     ) -> None:
@@ -162,6 +185,51 @@ class LoginPage(BasePage):
 
         expect(
             self.username_input
+        ).to_be_visible()
+
+        expect(
+            self.logout_link
+        ).not_to_be_visible()
+
+    def validate_logged_out(
+        self,
+    ) -> None:
+        expect(
+            self.username_input
+        ).to_be_visible()
+
+        expect(
+            self.password_input
+        ).to_be_visible()
+
+        expect(
+            self.logout_link
+        ).not_to_be_visible()
+
+        expect(
+            self.account_services_title
+        ).not_to_be_visible()
+
+    def validate_authentication_required(
+        self,
+        expected_message: str,
+    ) -> None:
+        expect(
+            self.visible_error_message
+        ).to_be_visible()
+
+        expect(
+            self.visible_error_message
+        ).to_contain_text(
+            expected_message
+        )
+
+        expect(
+            self.username_input
+        ).to_be_visible()
+
+        expect(
+            self.password_input
         ).to_be_visible()
 
         expect(
