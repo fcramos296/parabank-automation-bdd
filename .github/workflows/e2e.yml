@@ -22,7 +22,6 @@ on:
           - login
           - registration
           - transfer
-
       browser:
         description: "Browser"
         required: true
@@ -33,18 +32,12 @@ on:
           - firefox
           - webkit
 
-
 concurrency:
   group: parabank-e2e-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-
 permissions:
   contents: read
-  actions: read
-  pages: write
-  id-token: write
-
 
 env:
   PYTHONUNBUFFERED: "1"
@@ -56,15 +49,11 @@ env:
   BLOCK_NONESSENTIAL_RESOURCES: "true"
   UI_SCENARIO_DELAY_SECONDS: "0"
 
-
 jobs:
   regression:
     name: Regression Quality Gate
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
-    outputs:
-      pages_ready: ${{ steps.pages_upload.outcome }}
 
     steps:
       - name: Checkout repository
@@ -114,16 +103,13 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
 
-      - name: Validate Python source syntax
+      - name: Static analysis with Ruff
         shell: bash
-        run: |
-          python -m compileall \
-            config \
-            features \
-            pages \
-            scripts \
-            services \
-            utils
+        run: python -m ruff check .
+
+      - name: Validate BDD step bindings
+        shell: bash
+        run: python -m behave --dry-run --format=plain --no-summary
 
       - name: Install Playwright browser
         shell: bash
@@ -144,6 +130,7 @@ jobs:
 
       - name: Run regression
         id: tests
+        continue-on-error: true
         shell: bash
         run: |
           scope="${{ steps.execution.outputs.scope }}"
@@ -176,15 +163,7 @@ jobs:
               ;;
           esac
 
-          set +e
           python scripts/run.py "${args[@]}"
-          test_exit_code=$?
-          set -e
-
-          echo "exit_code=${test_exit_code}" >> "$GITHUB_OUTPUT"
-
-          # Mantém o job vivo para publicar as evidências mesmo em falha.
-          exit 0
 
       - name: Generate Allure Report
         id: allure
@@ -199,7 +178,6 @@ jobs:
           fi
 
           rm -rf reports/allure-report
-
           allure generate \
             reports/allure-results \
             --output reports/allure-report
@@ -222,51 +200,23 @@ jobs:
           steps.allure.outputs.generated == 'true'
         uses: actions/upload-artifact@v7
         with:
-          name: allure-report-${{ github.run_number }}-${{ steps.execution.outputs.browser }}
+          name: allure-report-${{ github.run_number }}
           path: reports/allure-report
           if-no-files-found: error
           retention-days: 14
-
-      - name: Configure GitHub Pages
-        id: pages_config
-        continue-on-error: true
-        if: >
-          always() &&
-          github.event_name == 'push' &&
-          github.ref == 'refs/heads/main' &&
-          steps.allure.outputs.generated == 'true'
-        uses: actions/configure-pages@v6
-
-      - name: Upload GitHub Pages artifact
-        id: pages_upload
-        if: >
-          always() &&
-          github.event_name == 'push' &&
-          github.ref == 'refs/heads/main' &&
-          steps.allure.outputs.generated == 'true' &&
-          steps.pages_config.outcome == 'success'
-        uses: actions/upload-pages-artifact@v5
-        with:
-          path: reports/allure-report
 
       - name: Final regression status
         if: always()
         shell: bash
         run: |
-          test_exit_code="${{ steps.tests.outputs.exit_code }}"
+          test_outcome="${{ steps.tests.outcome }}"
 
-          if [[ -z "$test_exit_code" ]]; then
-            echo "::error::Test execution did not return an exit code."
+          if [[ "$test_outcome" != "success" ]]; then
+            echo "::error::Regression test step finished with outcome: ${test_outcome}."
             exit 1
           fi
 
-          if [[ "$test_exit_code" != "0" ]]; then
-            echo "::error::Regression failed with exit code ${test_exit_code}."
-            exit "$test_exit_code"
-          fi
-
           echo "Regression quality gate passed."
-
 
   cross-browser-smoke:
     name: Smoke - ${{ matrix.browser }}
@@ -331,7 +281,6 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-
   deploy-report:
     name: Publish Allure Report
     needs:
@@ -343,16 +292,34 @@ jobs:
       github.event_name == 'push' &&
       github.ref == 'refs/heads/main' &&
       needs.regression.result == 'success' &&
-      needs.cross-browser-smoke.result == 'success' &&
-      needs.regression.outputs.pages_ready == 'success'
+      needs.cross-browser-smoke.result == 'success'
 
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
 
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
+      - name: Download Allure report artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: allure-report-${{ github.run_number }}
+          path: reports/allure-report
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: reports/allure-report
+
       - name: Deploy Allure Report to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
