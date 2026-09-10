@@ -9,9 +9,10 @@ from behave import (
     when,
 )
 
-from config.settings import settings
 from pages.login_page import LoginPage
 from pages.transfer_page import TransferPage
+from services.parabank_api_client import AccountType
+from utils.test_data import build_customer
 
 
 TRANSFER_SENT_DESCRIPTION = "Funds Transfer Sent"
@@ -25,9 +26,7 @@ def _account_balance(
 ) -> Decimal:
     try:
         return Decimal(
-            str(
-                account["balance"]
-            )
+            str(account["balance"])
         )
     except (
         KeyError,
@@ -35,55 +34,36 @@ def _account_balance(
         ValueError,
     ) as exc:
         raise AssertionError(
-            "Unexpected account payload "
-            f"without a valid balance: {account!r}"
+            "Unexpected account payload without a valid "
+            f"balance: {account!r}"
         ) from exc
 
 
-def _select_existing_accounts(
+def _select_source_account(
     accounts: list[dict],
-) -> tuple[dict, dict]:
-    if len(accounts) < 2:
+) -> dict:
+    if not accounts:
         raise AssertionError(
-            "The configured public customer must "
-            "have at least two existing accounts."
+            "The newly registered customer has no account."
         )
 
     try:
-        source = max(
+        return max(
             accounts,
             key=lambda account: (
                 _account_balance(account),
                 int(account["id"]),
             ),
         )
-
-        remaining = [
-            account
-            for account in accounts
-            if int(account["id"])
-            != int(source["id"])
-        ]
-
-        target = max(
-            remaining,
-            key=lambda account: int(
-                account["id"]
-            ),
-        )
-
     except (
         KeyError,
         TypeError,
         ValueError,
     ) as exc:
         raise AssertionError(
-            "Unexpected account payload returned "
-            "for the configured public customer: "
-            f"{accounts!r}"
+            "Unexpected account payload returned for the "
+            f"new customer: {accounts!r}"
         ) from exc
-
-    return source, target
 
 
 def _get_account_transactions(
@@ -95,22 +75,13 @@ def _get_account_transactions(
         f"/accounts/{account_id}/transactions"
     )
 
-    response = (
-        context.api_client.transport.request(
-            "GET",
-            url,
-            headers=(
-                context.api_client.JSON_HEADERS
-            ),
-        )
+    response = context.api_client.transport.request(
+        "GET",
+        url,
+        headers=context.api_client.JSON_HEADERS,
     )
 
     if not response.ok:
-        transport = response.headers.get(
-            "X-Test-Transport",
-            "unknown",
-        )
-
         body = " ".join(
             response.text.split()
         )[:300]
@@ -118,17 +89,15 @@ def _get_account_transactions(
         raise AssertionError(
             "Unable to retrieve transactions for "
             f"account {account_id}. "
-            f"HTTP {response.status_code}. "
-            f"Transport: {transport}. "
-            f"Body: {body}"
+            f"HTTP {response.status_code}. Body: {body}"
         )
 
     try:
         transactions = response.json()
     except ValueError as exc:
         raise AssertionError(
-            "Transactions endpoint did not return "
-            f"JSON for account {account_id}."
+            "Transactions endpoint did not return JSON "
+            f"for account {account_id}."
         ) from exc
 
     if not isinstance(
@@ -137,8 +106,7 @@ def _get_account_transactions(
     ):
         raise AssertionError(
             "Unexpected transactions payload for "
-            f"account {account_id}: "
-            f"{transactions!r}"
+            f"account {account_id}: {transactions!r}"
         )
 
     return transactions
@@ -152,9 +120,7 @@ def _transaction_ids(
     for transaction in transactions:
         try:
             ids.add(
-                int(
-                    transaction["id"]
-                )
+                int(transaction["id"])
             )
         except (
             KeyError,
@@ -162,8 +128,8 @@ def _transaction_ids(
             ValueError,
         ) as exc:
             raise AssertionError(
-                "Unexpected transaction payload "
-                f"without a valid id: {transaction!r}"
+                "Unexpected transaction payload without a "
+                f"valid id: {transaction!r}"
             ) from exc
 
     return ids
@@ -179,9 +145,7 @@ def _matches_transfer_transaction(
 ) -> bool:
     try:
         transaction_amount = Decimal(
-            str(
-                transaction["amount"]
-            )
+            str(transaction["amount"])
         )
 
         return (
@@ -193,7 +157,6 @@ def _matches_transfer_transaction(
             and str(transaction["description"])
             == description
         )
-
     except (
         KeyError,
         TypeError,
@@ -269,44 +232,26 @@ def _wait_for_transfer_transactions(
             )
         )
 
-        debit = (
-            _find_new_transfer_transaction(
-                last_source_transactions,
-                previous_ids=(
-                    context
-                    .source_transaction_ids_before
-                ),
-                account_id=(
-                    context.from_account_id
-                ),
-                amount=(
-                    context.transferred_amount
-                ),
-                transaction_type="Debit",
-                description=(
-                    TRANSFER_SENT_DESCRIPTION
-                ),
-            )
+        debit = _find_new_transfer_transaction(
+            last_source_transactions,
+            previous_ids=(
+                context.source_transaction_ids_before
+            ),
+            account_id=context.from_account_id,
+            amount=context.transferred_amount,
+            transaction_type="Debit",
+            description=TRANSFER_SENT_DESCRIPTION,
         )
 
-        credit = (
-            _find_new_transfer_transaction(
-                last_target_transactions,
-                previous_ids=(
-                    context
-                    .target_transaction_ids_before
-                ),
-                account_id=(
-                    context.to_account_id
-                ),
-                amount=(
-                    context.transferred_amount
-                ),
-                transaction_type="Credit",
-                description=(
-                    TRANSFER_RECEIVED_DESCRIPTION
-                ),
-            )
+        credit = _find_new_transfer_transaction(
+            last_target_transactions,
+            previous_ids=(
+                context.target_transaction_ids_before
+            ),
+            account_id=context.to_account_id,
+            amount=context.transferred_amount,
+            transaction_type="Credit",
+            description=TRANSFER_RECEIVED_DESCRIPTION,
         )
 
         if (
@@ -322,23 +267,18 @@ def _wait_for_transfer_transactions(
         )
 
     source_new_ids = sorted(
-        _transaction_ids(
-            last_source_transactions
-        )
+        _transaction_ids(last_source_transactions)
         - context.source_transaction_ids_before
     )
 
     target_new_ids = sorted(
-        _transaction_ids(
-            last_target_transactions
-        )
+        _transaction_ids(last_target_transactions)
         - context.target_transaction_ids_before
     )
 
     raise AssertionError(
-        "The UI reported a successful transfer, "
-        "but the expected new Debit/Credit records "
-        "were not observed through the backend. "
+        "The UI reported a successful transfer, but the "
+        "expected new Debit/Credit records were not observed. "
         f"Source account: {context.from_account_id}. "
         f"Target account: {context.to_account_id}. "
         f"Amount: {context.transferred_amount}. "
@@ -349,24 +289,25 @@ def _wait_for_transfer_transactions(
 
 @given(
     "que estou autenticado com um usuário "
-    "existente do ambiente público e possuo "
-    "duas contas"
+    "exclusivo e possuo duas contas"
 )
 def step_auth_with_two_accounts(
     context,
 ) -> None:
-    username = (
-        settings.PUBLIC_EXISTING_USERNAME
+    customer = build_customer(
+        "transfer"
     )
 
-    password = (
-        settings.public_existing_password
+    context.transfer_customer = customer
+
+    context.api_client.register_user(
+        customer.registration_payload()
     )
 
     customer_data = (
         context.api_client.login_customer(
-            username,
-            password,
+            customer.username,
+            customer.password,
         )
     )
 
@@ -374,36 +315,44 @@ def step_auth_with_two_accounts(
         customer_data["id"]
     )
 
-    context.transfer_customer_id = (
-        customer_id
-    )
+    context.transfer_customer_id = customer_id
 
-    accounts = (
-        context.api_client
-        .get_customer_accounts(
+    existing_accounts = (
+        context.api_client.get_customer_accounts(
             customer_id
         )
     )
 
-    (
-        source_account,
-        target_account,
-    ) = _select_existing_accounts(
-        accounts
+    source_account = _select_source_account(
+        existing_accounts
     )
 
-    context.from_account_id = int(
+    source_account_id = int(
         source_account["id"]
     )
 
+    target_account = (
+        context.api_client.create_account(
+            customer_id=customer_id,
+            account_type=AccountType.SAVINGS,
+            from_account_id=source_account_id,
+        )
+    )
+
+    context.from_account_id = source_account_id
     context.to_account_id = int(
         target_account["id"]
     )
 
     context.from_balance_before = (
-        context.api_client
-        .get_account_balance(
+        context.api_client.get_account_balance(
             context.from_account_id
+        )
+    )
+
+    context.to_balance_before = (
+        context.api_client.get_account_balance(
+            context.to_account_id
         )
     )
 
@@ -414,8 +363,8 @@ def step_auth_with_two_accounts(
     login_page.open()
 
     login_page.login(
-        username,
-        password,
+        customer.username,
+        customer.password,
     )
 
     login_page.validate_login_success()
@@ -452,10 +401,9 @@ def step_transfer_funds(
         < context.transferred_amount
     ):
         raise AssertionError(
-            "The selected public source account "
-            "does not have enough balance for "
-            f"the transfer. Account: "
-            f"{context.from_account_id}. "
+            "The selected test source account does not "
+            "have enough balance for the transfer. "
+            f"Account: {context.from_account_id}. "
             f"Balance: {context.from_balance_before}. "
             f"Required: {context.transferred_amount}."
         )
@@ -488,12 +436,8 @@ def step_transfer_funds(
 
     context.transfer_page.transfer(
         amount=amount,
-        from_account_id=(
-            context.from_account_id
-        ),
-        to_account_id=(
-            context.to_account_id
-        ),
+        from_account_id=context.from_account_id,
+        to_account_id=context.to_account_id,
     )
 
 
@@ -506,16 +450,11 @@ def step_assert_transfer_success(
     context,
     amount: str,
 ) -> None:
-    context.transfer_page\
-        .validate_transfer_success(
-            expected_amount=amount,
-            from_account_id=(
-                context.from_account_id
-            ),
-            to_account_id=(
-                context.to_account_id
-            ),
-        )
+    context.transfer_page.validate_transfer_success(
+        expected_amount=amount,
+        from_account_id=context.from_account_id,
+        to_account_id=context.to_account_id,
+    )
 
 
 @then(
@@ -527,6 +466,34 @@ def step_assert_transfer_transactions(
 ) -> None:
     _wait_for_transfer_transactions(
         context
+    )
+
+
+@then(
+    "os saldos das duas contas devem "
+    "refletir a transferência"
+)
+def step_assert_balances_after_transfer(
+    context,
+) -> None:
+    expected_from = (
+        context.from_balance_before
+        - context.transferred_amount
+    )
+
+    expected_to = (
+        context.to_balance_before
+        + context.transferred_amount
+    )
+
+    context.api_client.wait_for_account_balance(
+        account_id=context.from_account_id,
+        expected_balance=expected_from,
+    )
+
+    context.api_client.wait_for_account_balance(
+        account_id=context.to_account_id,
+        expected_balance=expected_to,
     )
 
 
@@ -543,12 +510,8 @@ def step_attempt_invalid_transfer(
 ) -> None:
     context.transfer_page.transfer(
         amount=amount,
-        from_account_id=(
-            context.from_account_id
-        ),
-        to_account_id=(
-            context.to_account_id
-        ),
+        from_account_id=context.from_account_id,
+        to_account_id=context.to_account_id,
     )
 
 
@@ -563,7 +526,24 @@ def step_assert_transfer_error(
     context,
     message: str,
 ) -> None:
-    context.transfer_page\
-        .validate_transfer_error(
-            message
-        )
+    context.transfer_page.validate_transfer_error(
+        message
+    )
+
+
+@then(
+    "os saldos das duas contas devem "
+    "permanecer inalterados"
+)
+def step_assert_balances_unchanged(
+    context,
+) -> None:
+    context.api_client.wait_for_account_balance(
+        account_id=context.from_account_id,
+        expected_balance=context.from_balance_before,
+    )
+
+    context.api_client.wait_for_account_balance(
+        account_id=context.to_account_id,
+        expected_balance=context.to_balance_before,
+    )
