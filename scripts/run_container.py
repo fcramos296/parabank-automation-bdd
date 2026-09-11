@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
 import time
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
+
+import boto3
+import requests
 
 from config.settings import settings
 from scripts.parabank_env import parabank_is_ready
@@ -96,6 +102,81 @@ def build_behave_command(args: argparse.Namespace) -> list[str]:
     return command
 
 
+def get_task_execution_id() -> str:
+    metadata_uri = os.getenv("ECS_CONTAINER_METADATA_URI_V4")
+
+    if metadata_uri:
+        try:
+            response = requests.get(
+                f"{metadata_uri}/task",
+                timeout=3,
+            )
+            response.raise_for_status()
+
+            task_arn = str(response.json().get("TaskARN", ""))
+
+            if task_arn:
+                return task_arn.rsplit("/", maxsplit=1)[-1]
+
+        except requests.RequestException as exc:
+            print(
+                "[container][WARN] "
+                f"Unable to read ECS task metadata: {exc}"
+            )
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    suffix = uuid.uuid4().hex[:8]
+
+    return f"local-{timestamp}-{suffix}"
+
+
+def upload_allure_results() -> str | None:
+    bucket = os.getenv("ALLURE_RESULTS_S3_BUCKET")
+
+    if not bucket:
+        print(
+            "[container] ALLURE_RESULTS_S3_BUCKET is not configured; "
+            "skipping S3 upload."
+        )
+        return None
+
+    artifacts = sorted(
+        artifact
+        for artifact in ALLURE_RESULTS_DIR.rglob("*")
+        if artifact.is_file()
+    )
+
+    if not artifacts:
+        print("[container] No Allure results found to upload.")
+        return None
+
+    task_id = get_task_execution_id()
+    prefix = f"tasks/{task_id}/allure-results"
+
+    s3 = boto3.client("s3")
+
+    print(
+        f"[container] Uploading {len(artifacts)} Allure artifacts "
+        f"to s3://{bucket}/{prefix}/"
+    )
+
+    for artifact in artifacts:
+        relative_path = artifact.relative_to(ALLURE_RESULTS_DIR).as_posix()
+        object_key = f"{prefix}/{relative_path}"
+
+        s3.upload_file(
+            str(artifact),
+            bucket,
+            object_key,
+        )
+
+    s3_uri = f"s3://{bucket}/{prefix}/"
+
+    print(f"[container] Allure upload completed: {s3_uri}")
+
+    return s3_uri
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
 
@@ -114,8 +195,19 @@ def main(argv: Sequence[str] | None = None) -> int:
             check=False,
         )
 
+        test_exit_code = int(completed.returncode)
+
         print(f"[container] Allure results: {ALLURE_RESULTS_DIR}")
-        return int(completed.returncode)
+
+        try:
+            upload_allure_results()
+        except Exception as exc:
+            print(f"[container][ERROR] Failed to upload Allure results: {exc}")
+
+            if test_exit_code == 0:
+                return 1
+
+        return test_exit_code
 
     except KeyboardInterrupt:
         print("[container] Execution cancelled.")

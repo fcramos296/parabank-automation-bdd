@@ -1,10 +1,5 @@
 resource "aws_ecs_cluster" "qa" {
   name = local.name_prefix
-
-  setting {
-    name  = "containerInsights"
-    value = "enabled"
-  }
 }
 
 resource "aws_ecs_task_definition" "qa" {
@@ -60,6 +55,14 @@ resource "aws_ecs_task_definition" "qa" {
       ]
 
       environment = [
+        {
+          name  = "AWS_REGION"
+          value = var.aws_region
+        },
+        {
+          name  = "AWS_DEFAULT_REGION"
+          value = var.aws_region
+        },
         {
           name  = "LOCAL_BASE_URL"
           value = "http://localhost:8080/parabank"

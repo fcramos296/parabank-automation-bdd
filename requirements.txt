@@ -4,4 +4,5 @@ allure-behave==2.16.0
 requests==2.34.2
 pydantic-settings==2.15.0
 python-dotenv==1.2.3
+boto3==1.40.40
 ruff==0.16.6
