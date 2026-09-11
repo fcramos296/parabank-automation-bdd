@@ -54,10 +54,10 @@ $env:AWS_PROFILE = "parabank"
 For an existing local state that must be migrated into S3:
 
 ```powershell
-terraform init -migrate-state -reconfigure
+terraform init -migrate-state
 ```
 
-Review and accept the migration prompt only after confirming the local `terraform.tfstate` is the recovered/current state.
+Review and accept the migration prompt only after confirming the local `terraform.tfstate` is the recovered/current state. Do not combine `-migrate-state` with `-reconfigure`; they are mutually exclusive.
 
 After migration, validate:
 
