@@ -5,7 +5,7 @@ data "aws_availability_zones" "available" {
 }
 
 locals {
-  name_prefix = "${var.project_name}-${var.environment}"
+  name_prefix  = "${var.project_name}-${var.environment}"
   runner_image = "${aws_ecr_repository.runner.repository_url}:${var.runner_image_tag}"
 
   github_subjects = [
