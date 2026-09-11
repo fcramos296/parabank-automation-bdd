@@ -2,7 +2,10 @@ aws_region  = "us-east-1"
 project_name = "parabank-qa"
 environment  = "test"
 
-github_repository = "fcramos296/parabank-automation-bdd"
+github_repository          = "fcramos296/parabank-automation-bdd"
+github_repository_owner_id = "297217694"
+github_repository_id       = "1363052182"
+
 github_allowed_refs = [
   "refs/heads/main",
   "refs/heads/feat/aws-fargate-e2e",

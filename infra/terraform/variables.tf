@@ -22,6 +22,18 @@ variable "github_repository" {
   default     = "fcramos296/parabank-automation-bdd"
 }
 
+variable "github_repository_owner_id" {
+  description = "Immutable GitHub repository owner ID used in OIDC subject claims."
+  type        = string
+  default     = "297217694"
+}
+
+variable "github_repository_id" {
+  description = "Immutable GitHub repository ID used in OIDC subject claims."
+  type        = string
+  default     = "1363052182"
+}
+
 variable "github_allowed_refs" {
   description = "Exact Git refs allowed to assume the GitHub Actions OIDC role."
   type        = list(string)
