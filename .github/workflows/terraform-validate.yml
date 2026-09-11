@@ -3,14 +3,14 @@ name: Terraform Validation
 on:
   push:
     branches:
-      - feat/aws-fargate-e2e
+      - release/2.0-aws
     paths:
       - "infra/terraform/**"
       - ".github/workflows/terraform-validate.yml"
 
   pull_request:
     branches:
-      - main
+      - release/2.0-aws
     paths:
       - "infra/terraform/**"
       - ".github/workflows/terraform-validate.yml"
