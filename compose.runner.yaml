@@ -1,0 +1,25 @@
+services:
+  parabank:
+    image: parasoft/parabank:baseline
+    expose:
+      - "8080"
+    restart: "no"
+
+  tests:
+    build:
+      context: .
+      dockerfile: Dockerfile.tests
+    init: true
+    ipc: host
+    depends_on:
+      - parabank
+    environment:
+      LOCAL_BASE_URL: http://parabank:8080/parabank
+      LOCAL_STARTUP_TIMEOUT_SECONDS: "180"
+      PW_TIMEOUT_MS: "10000"
+      PW_NAVIGATION_TIMEOUT_MS: "15000"
+      REQUEST_TIMEOUT_SECONDS: "30"
+      BLOCK_NONESSENTIAL_RESOURCES: "true"
+      UI_SCENARIO_DELAY_SECONDS: "0"
+    volumes:
+      - ./reports:/workspace/reports
