@@ -59,7 +59,7 @@ else {
 
 aws s3api put-public-access-block `
     --bucket $Bucket `
-    --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true | Out-Null
+    --public-access-block-configuration "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true" | Out-Null
 
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to configure public access block on '$Bucket'."
@@ -67,7 +67,7 @@ if ($LASTEXITCODE -ne 0) {
 
 aws s3api put-bucket-encryption `
     --bucket $Bucket `
-    --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}' | Out-Null
+    --server-side-encryption-configuration "Rules=[{ApplyServerSideEncryptionByDefault={SSEAlgorithm=AES256}}]" | Out-Null
 
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to configure encryption on '$Bucket'."
@@ -75,7 +75,7 @@ if ($LASTEXITCODE -ne 0) {
 
 aws s3api put-bucket-versioning `
     --bucket $Bucket `
-    --versioning-configuration Status=Enabled | Out-Null
+    --versioning-configuration "Status=Enabled" | Out-Null
 
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to enable versioning on '$Bucket'."
@@ -83,7 +83,7 @@ if ($LASTEXITCODE -ne 0) {
 
 aws s3api put-bucket-tagging `
     --bucket $Bucket `
-    --tagging 'TagSet=[{Key=Project,Value=parabank-qa},{Key=Environment,Value=test},{Key=ManagedBy,Value=TerraformBackend}]' | Out-Null
+    --tagging "TagSet=[{Key=Project,Value=parabank-qa},{Key=Environment,Value=test},{Key=ManagedBy,Value=TerraformBackend}]" | Out-Null
 
 if ($LASTEXITCODE -ne 0) {
     throw "Failed to configure tags on '$Bucket'."
