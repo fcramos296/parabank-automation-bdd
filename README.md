@@ -1,33 +1,63 @@
-<h1 align="center">ParaBank Automation BDD</h1>
+<h1 align="center">ParaBank Automation BDD 2.0</h1>
 
 <p align="center">
-  Framework E2E com <strong>Python + Playwright + Behave</strong>, ambiente determinístico em Docker,<br/>
-  validações UI + API, Allure Report e CI/CD cross-browser.
+  Framework E2E com <strong>Python + Playwright + Behave</strong>, execução local em Docker<br/>
+  e execução remota em <strong>AWS ECS/Fargate</strong> com Terraform, ECR, S3, CloudWatch e GitHub OIDC.
 </p>
 
 <p align="center">
-  <a href="https://github.com/fcramos296/parabank-automation-bdd/actions/workflows/e2e.yml">
-    <img src="https://github.com/fcramos296/parabank-automation-bdd/actions/workflows/e2e.yml/badge.svg" alt="ParaBank E2E" />
+  <a href="https://github.com/fcramos296/parabank-automation-bdd/actions/workflows/container-runner.yml">
+    <img src="https://github.com/fcramos296/parabank-automation-bdd/actions/workflows/container-runner.yml/badge.svg?branch=release%2F2.0-aws" alt="Container Runner Validation" />
+  </a>
+  <a href="https://github.com/fcramos296/parabank-automation-bdd/actions/workflows/terraform-validate.yml">
+    <img src="https://github.com/fcramos296/parabank-automation-bdd/actions/workflows/terraform-validate.yml/badge.svg?branch=release%2F2.0-aws" alt="Terraform Validation" />
   </a>
   <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white" alt="Python 3.10+" />
   <img src="https://img.shields.io/badge/Playwright-1.62-2EAD33?logo=playwright&logoColor=white" alt="Playwright" />
   <img src="https://img.shields.io/badge/BDD-Behave-6A5ACD" alt="Behave BDD" />
-  <img src="https://img.shields.io/badge/Docker-Local-2496ED?logo=docker&logoColor=white" alt="Docker" />
-  <img src="https://img.shields.io/badge/Allure-Report-FF6A00" alt="Allure Report" />
+  <img src="https://img.shields.io/badge/AWS-ECS%20Fargate-FF9900?logo=amazonaws&logoColor=white" alt="AWS ECS Fargate" />
+  <img src="https://img.shields.io/badge/IaC-Terraform-844FBA?logo=terraform&logoColor=white" alt="Terraform" />
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License" />
 </p>
 
 ---
 
+## 📌 Versionamento do projeto
+
+O repositório mantém duas linhas independentes:
+
+| Versão | Branch | Objetivo |
+| --- | --- | --- |
+| **1.x** | `main` | versão estável com execução local em Docker e pipeline original |
+| **2.0** | `release/2.0-aws` | versão cloud com runner containerizado e execução em AWS ECS/Fargate |
+
+A versão 2.0 **não será mergeada na `main`**. As duas implementações permanecem disponíveis e podem evoluir de forma independente.
+
+A antiga branch `feat/aws-fargate-e2e` representa o histórico de desenvolvimento da versão AWS. A branch mantida para a linha 2.0 é `release/2.0-aws`.
+
+---
+
 ## 📌 Sobre o projeto
 
-Este projeto automatiza os fluxos de **Login/Logout**, **Registro de Usuário** e **Transferência de Fundos** do ParaBank.
+O projeto automatiza os fluxos de **Login/Logout**, **Registro de Usuário** e **Transferência de Fundos** do ParaBank.
 
-A solução foi estruturada como um framework de automação sustentável, com isolamento de dados, pré-condições via API, validação de efeitos persistidos, Page Object Model, ambiente reproduzível e quality gates em CI/CD.
+A solução foi construída como um framework de QA Automation sustentável, com:
 
-O repositório foi desenvolvido como **desafio técnico / projeto de demonstração de práticas de QA Automation**, priorizando decisões que seriam defensáveis em um contexto real: isolamento, determinismo, rastreabilidade, separação de responsabilidades, documentação de defeitos conhecidos e feedback confiável no pipeline.
+- isolamento de dados por cenário;
+- Page Object Model;
+- pré-condições via API;
+- validações UI + backend;
+- ambiente determinístico e descartável;
+- execução local e containerizada;
+- quality gates em CI/CD;
+- evidências Allure;
+- infraestrutura AWS definida como código.
 
-### ✨ Destaques
+A versão 2.0 preserva a cobertura funcional já estabilizada e adiciona uma segunda camada de execução orientada a cloud.
+
+---
+
+## ✨ Destaques
 
 - **24 cenários E2E** orientados a risco e regra de negócio;
 - massa exclusiva e dinâmica por cenário;
@@ -35,13 +65,17 @@ O repositório foi desenvolvido como **desafio técnico / projeto de demonstraç
 - API-first para pré-condições técnicas;
 - validações cruzadas entre interface e backend;
 - `Decimal` para valores monetários;
-- polling com deadline em vez de sleeps fixos para consistência backend;
-- ambiente ParaBank descartável em Docker;
-- Ruff + `behave --dry-run` como gates estáticos;
-- regressão completa em Chromium;
-- smoke cross-browser em Firefox e WebKit;
-- screenshots no Allure em caso de falha;
-- bootstrap para Windows, Linux e macOS.
+- polling com deadline em vez de sleeps fixos;
+- ParaBank descartável em Docker;
+- runner Playwright/Behave containerizado;
+- validação local do runner com Docker Compose;
+- Terraform para infraestrutura AWS;
+- autenticação GitHub → AWS por OIDC, sem access keys persistentes;
+- runner publicado em Amazon ECR;
+- execução efêmera em Amazon ECS/Fargate;
+- logs em CloudWatch;
+- resultados Allure persistidos em S3 e publicados como artifact do GitHub Actions;
+- quality gate baseado no exit code real do container de testes.
 
 ---
 
@@ -49,15 +83,21 @@ O repositório foi desenvolvido como **desafio técnico / projeto de demonstraç
 
 | Tecnologia | Responsabilidade |
 | --- | --- |
-| **Python** | Linguagem principal do framework |
-| **Playwright** | Automação web e assertions de interface |
+| **Python** | linguagem principal do framework |
+| **Playwright** | automação web e assertions de interface |
 | **Behave / Gherkin** | BDD e especificação dos comportamentos |
-| **Requests** | Setup e validações de backend |
-| **Pydantic Settings** | Configuração do ambiente e timeouts |
-| **Docker / Compose** | Ambiente ParaBank descartável |
-| **Ruff** | Análise estática e formatação |
-| **Allure Report** | Evidências e relatório HTML |
-| **GitHub Actions** | CI/CD e quality gates |
+| **Requests** | setup e validações de backend |
+| **Pydantic Settings** | configuração do ambiente e timeouts |
+| **Docker / Compose** | ambiente local e validação do runner containerizado |
+| **Ruff** | análise estática e formatação |
+| **Allure** | evidências e resultados de execução |
+| **GitHub Actions** | CI/CD e orquestração da execução AWS |
+| **Terraform** | infraestrutura como código |
+| **Amazon ECR** | registry da imagem do runner |
+| **Amazon ECS/Fargate** | execução efêmera dos testes |
+| **Amazon S3** | persistência de resultados Allure |
+| **CloudWatch Logs** | logs dos containers |
+| **GitHub OIDC / IAM** | autenticação federada entre GitHub Actions e AWS |
 
 ---
 
@@ -72,183 +112,128 @@ efeito persistido         → API / backend
 evidência                 → Allure
 ```
 
-Isso evita executar pela interface etapas que não fazem parte do comportamento em teste e reduz tempo, acoplamento e flakiness.
+Isso evita executar pela interface etapas que não pertencem ao comportamento em teste e reduz tempo, acoplamento e flakiness.
 
 ### 🔐 Login e Logout — 10 cenários
 
-Cobertura:
+Cobertura principal:
 
 - login válido;
-- persistência da sessão após reload;
-- recuperação após tentativa com senha incorreta;
+- persistência de sessão;
+- recuperação após credencial inválida;
 - usuário inexistente;
-- senha incorreta para usuário existente;
-- username vazio;
-- senha vazia;
-- ambos os campos vazios;
-- logout encerrando a sessão;
+- senha incorreta;
+- campos vazios;
+- logout;
 - bloqueio de área protegida após logout.
-
-Usuários necessários como pré-condição são provisionados via backend para que o cenário exercite exclusivamente autenticação e sessão.
 
 ### 👤 Registro de Usuário — 6 cenários
 
-Cobertura:
+Cobertura principal:
 
-- cadastro completo válido;
-- persistência dos dados informados;
+- cadastro válido;
+- persistência dos dados;
 - autenticação backend do cliente criado;
 - criação automática da conta `CHECKING`;
-- validação do saldo inicial;
+- saldo inicial;
 - telefone opcional;
-- username e senha no boundary de 20 caracteres;
-- campos obrigatórios;
+- boundaries de username/senha;
+- obrigatoriedade dos campos;
 - confirmação de senha divergente;
 - username duplicado.
 
-Quando **registro** é o comportamento em teste, o cadastro acontece pela interface. O backend é utilizado depois da ação para confirmar os efeitos persistidos.
-
 ### 💸 Transferência de Fundos — 8 cenários
 
-Cobertura:
+Cobertura principal:
 
-- transferência com valor monetário comum;
-- boundary mínimo de `0.01`;
-- transferência no sentido inverso;
-- transferência de todo o saldo disponível;
-- saldo final da origem igual a `0.00`;
-- isolamento das contas exibidas nos seletores;
-- valor vazio;
-- valor textual;
-- formato monetário com vírgula.
+- transferência válida;
+- valor mínimo `0.01`;
+- transferência reversa;
+- transferência de todo o saldo;
+- validação de saldo final;
+- isolamento das contas exibidas;
+- entradas inválidas;
+- verificação das transações debit/credit no backend.
 
-Nas transferências válidas a suíte verifica:
-
-```text
-confirmação na UI
-      ↓
-conta origem / destino
-      ↓
-Debit - Funds Transfer Sent
-      ↓
-Credit - Funds Transfer Received
-      ↓
-saldos exatos no backend
-```
-
-Nas tentativas rejeitadas:
-
-```text
-sem confirmação de sucesso
-      ↓
-janela de estabilização
-      ↓
-nenhuma transação criada
-      ↓
-saldos inalterados
-```
-
-Os exemplos de entrada monetária inválida são marcados com `@known_defect` porque a versão atual do ParaBank expõe uma mensagem genérica de erro interno. A suíte **não protege o texto do erro como contrato**: ela continua validando as invariantes de negócio. O comportamento está documentado em [`docs/findings.md`](docs/findings.md).
-
-> O projeto não espera rejeição por saldo insuficiente porque o domínio atual do ParaBank permite saldo negativo. A cobertura segue o comportamento implementado em vez de inventar uma regra inexistente.
+Os casos conhecidos de entrada monetária inválida permanecem documentados em [`docs/findings.md`](docs/findings.md).
 
 ---
 
-## 🏗️ Arquitetura
+## 🏗️ Arquitetura 2.0
+
+```text
+GitHub Actions
+      │
+      │ OIDC
+      ▼
+AWS IAM Role
+      │
+      ├──────────────► Amazon ECR
+      │                   │
+      │                   ▼
+      │              test runner image
+      │
+      ▼
+Amazon ECS / Fargate
+      │
+      ├── container: parabank
+      │
+      └── container: tests
+              │
+              ├────────► CloudWatch Logs
+              │
+              └────────► Amazon S3 / Allure
+                              │
+                              ▼
+                      GitHub Actions artifact
+```
+
+Os containers `parabank` e `tests` executam na mesma task Fargate. O runner acessa o SUT por:
+
+```text
+http://localhost:8080/parabank
+```
+
+Por isso a aplicação não precisa ser exposta por load balancer ou regra de entrada.
+
+---
+
+## 📁 Estrutura relevante
 
 ```text
 .
 ├── .github/
 │   └── workflows/
-│       └── e2e.yml
+│       ├── aws-fargate-e2e.yml
+│       ├── container-runner.yml
+│       ├── e2e.yml
+│       └── terraform-validate.yml
 ├── config/
-│   └── settings.py
 ├── docs/
+│   ├── AWS_FARGATE_RUNNER.md
 │   └── findings.md
 ├── features/
-│   ├── environment.py
-│   ├── login.feature
-│   ├── registration.feature
-│   ├── transfer.feature
-│   └── steps/
-│       ├── login_steps.py
-│       ├── registration_steps.py
-│       └── transfer_steps.py
 ├── pages/
-│   ├── base_page.py
-│   ├── login_page.py
-│   ├── register_page.py
-│   └── transfer_page.py
-├── scripts/
-│   ├── bootstrap_docker.py
-│   ├── bootstrap_python_windows.ps1
-│   ├── configure_env.py
-│   ├── parabank_env.py
-│   └── run.py
 ├── services/
-│   ├── http_transport.py
-│   └── parabank_api_client.py
 ├── utils/
-│   ├── gherkin_values.py
-│   └── test_data.py
-├── behave.ini
+├── scripts/
+│   ├── run.py
+│   └── run_container.py
+├── infra/
+│   └── terraform/
+├── Dockerfile.tests
 ├── compose.yaml
-├── LICENSE
+├── compose.runner.yaml
+├── behave.ini
 ├── pyproject.toml
-├── requirements.txt
-├── run_tests.bat
-└── run_tests.sh
+└── requirements.txt
 ```
-
-### Page Object Model
-
-Page Objects concentram seletores, ações e assertions de interface. Steps coordenam comportamento, massa e serviços sem acessar HTTP diretamente.
-
-### Service layer
-
-`ParabankApiClient` encapsula setup e consultas REST, incluindo contas e transações. O transporte HTTP é **direto e único**, pois a versão final executa exclusivamente contra o ParaBank local em Docker.
-
-### Isolamento
-
-Cada cenário recebe um novo `BrowserContext`. Usuários e contas são gerados dinamicamente e de forma exclusiva quando necessário.
 
 ---
 
-## 🐳 Por que executar o ParaBank localmente?
+## 🐳 Execução local tradicional
 
-A instância pública do ParaBank apresentou estado compartilhado e comportamentos instáveis durante o desenvolvimento. Isso impedia assertions determinísticas sobre contas, saldos e transações.
-
-A versão final usa a imagem oficial `parasoft/parabank:baseline`. A Parasoft atualmente publica os canais `baseline`, `latest` e `feature`; `baseline` foi escolhido para evitar depender diretamente do canal `latest`.
-
-```text
-docker compose down --volumes --remove-orphans
-                ↓
-docker compose up -d
-                ↓
-readiness HTTP da aplicação
-                ↓
-executa os testes
-                ↓
-gera evidências
-                ↓
-docker compose down --volumes --remove-orphans
-```
-
-O runner só libera a suíte depois que `/parabank/index.htm` responde como aplicação ParaBank, evitando confundir porta aberta com SUT pronto.
-
-Benefícios:
-
-- banco limpo a cada execução;
-- ausência de usuários compartilhados;
-- estado previsível;
-- massa exclusiva;
-- assertions mais fortes;
-- mesma topologia local e CI;
-- nenhuma dependência do ambiente público ou de proxy externo.
-
----
-
-## 🚀 Execução rápida
+A execução local da suíte continua disponível:
 
 ### Windows
 
@@ -256,7 +241,7 @@ Benefícios:
 run_tests.bat
 ```
 
-Se Python já estiver disponível:
+Ou:
 
 ```powershell
 python scripts/run.py
@@ -275,137 +260,205 @@ Ou:
 python3 scripts/run.py
 ```
 
-Detalhes do bootstrap: [`DOCKER_SETUP.md`](DOCKER_SETUP.md).
-
 ---
 
-## ⚙️ Configuração
+## 📦 Validação do runner containerizado
 
-O `.env` contém apenas configuração de ambiente/SUT e timeouts. Browser e modo de execução são opções do runner, não configurações persistidas no `.env`.
-
-Exemplo:
-
-```dotenv
-LOCAL_BASE_URL=http://localhost:8080/parabank
-LOCAL_STARTUP_TIMEOUT_SECONDS=180
-PW_TIMEOUT_MS=10000
-PW_NAVIGATION_TIMEOUT_MS=15000
-REQUEST_TIMEOUT_SECONDS=30
-BLOCK_NONESSENTIAL_RESOURCES=true
-UI_SCENARIO_DELAY_SECONDS=0
-```
-
-Browser e modo visual:
-
-```bash
-python scripts/run.py --browser firefox
-python scripts/run.py --headed
-```
-
----
-
-## 🧪 Comandos úteis
+A mesma suíte pode ser executada usando o container de testes usado como base da arquitetura AWS.
 
 Suíte completa:
 
 ```bash
-python scripts/run.py
-```
-
-Por domínio:
-
-```bash
-python scripts/run.py --scope login
-python scripts/run.py --scope registration
-python scripts/run.py --scope transfer
+docker compose -f compose.runner.yaml up --build --abort-on-container-exit --exit-code-from tests
 ```
 
 Smoke:
 
 ```bash
-python scripts/run.py --tags "@smoke"
+docker compose -f compose.runner.yaml up -d parabank
+docker compose -f compose.runner.yaml run --rm tests --tags "@smoke"
+docker compose -f compose.runner.yaml down --volumes --remove-orphans
 ```
 
-Cross-browser:
-
-```bash
-python scripts/run.py --browser firefox
-python scripts/run.py --browser webkit
-```
-
-Manter o ambiente ativo:
-
-```bash
-python scripts/run.py --keep-environment
-```
-
----
-
-## 📊 Allure Report
-
-Resultados:
+Resultados locais:
 
 ```text
 reports/allure-results
 ```
 
-Relatório HTML:
+---
+
+## ☁️ Infraestrutura AWS
+
+A definição Terraform está em:
 
 ```text
-reports/allure-report
+infra/terraform/
 ```
 
-Os wrappers podem gerar e abrir o relatório padrão do Allure ao final da execução. Em falhas de step, uma screenshot é anexada automaticamente.
+Principais recursos:
+
+- VPC dedicada;
+- duas subnets públicas;
+- security group sem ingress;
+- ECR;
+- ECS cluster;
+- task definition Fargate;
+- CloudWatch log group;
+- S3 privado para Allure;
+- ECS execution role;
+- ECS task role;
+- GitHub Actions role;
+- GitHub OIDC provider.
+
+Detalhes: [`infra/terraform/README.md`](infra/terraform/README.md).
 
 ---
 
-## 🔄 CI/CD
+## 🔐 GitHub OIDC
+
+A versão 2.0 não utiliza AWS access key e secret key persistentes no GitHub Actions.
+
+O workflow solicita um token OIDC do GitHub e assume uma IAM role criada pelo Terraform.
+
+A trust policy está restrita a:
+
+```text
+refs/heads/release/2.0-aws
+```
+
+A `main` não está autorizada a assumir a role AWS da versão 2.0.
+
+> Se a infraestrutura AWS existente ainda estiver configurada com a antiga branch de desenvolvimento, execute um novo `terraform apply` uma vez para atualizar a trust policy real da IAM role.
+
+---
+
+## 🚀 Execução AWS Fargate
 
 Workflow:
 
 ```text
-.github/workflows/e2e.yml
+.github/workflows/aws-fargate-e2e.yml
 ```
 
-### Pull Request para `main`
+A execução é manual via `workflow_dispatch`.
+
+Entradas disponíveis:
+
+- expressão de tags do Behave;
+- browser: `chromium`, `firefox` ou `webkit`.
+
+Fluxo:
 
 ```text
 checkout
   ↓
-Python 3.12
+OIDC / AssumeRole
   ↓
-Ruff lint + format check
+login no ECR
   ↓
-behave --dry-run
+build Dockerfile.tests
   ↓
-Docker / Compose
+push da imagem imutável
   ↓
-Playwright Chromium
+nova revisão da ECS task definition
   ↓
-ParaBank local + banco limpo
+ecs run-task
   ↓
-regressão completa
+ParaBank + Playwright/Behave
   ↓
-Allure artifacts
+exit code do container tests
+  ↓
+CloudWatch logs
+  ↓
+Allure no S3
+  ↓
+artifact no GitHub Actions
   ↓
 quality gate
 ```
 
-A regressão completa em Chromium é o quality gate do PR.
+A execução só passa quando:
 
-### Push em `main`
+1. o container `tests` finaliza com exit code `0`;
+2. os resultados Allure são recuperados com sucesso.
+
+---
+
+## 🔄 CI/CD da versão 2.0
+
+### Container Runner Validation
 
 ```text
-                    ┌── Full Regression / Chromium
-merge em main ──────┼── Smoke / Firefox
-                    └── Smoke / WebKit
+.github/workflows/container-runner.yml
 ```
 
-O job de execução de testes possui apenas permissões de leitura. `pages: write` e `id-token: write` ficam restritos ao job responsável por publicar o Allure em GitHub Pages.
+Executa na `release/2.0-aws` quando arquivos relacionados ao runner são alterados.
 
-### Execução manual
+Valida:
 
-`workflow_dispatch` permite escolher escopo (`full`, `smoke`, `login`, `registration`, `transfer`) e browser (`chromium`, `firefox`, `webkit`).
+- build do container;
+- inicialização do ParaBank;
+- smoke suite;
+- geração de evidências;
+- cleanup do ambiente.
+
+### Terraform Validation
+
+```text
+.github/workflows/terraform-validate.yml
+```
+
+Executa:
+
+```bash
+terraform fmt -check -recursive
+terraform init -backend=false -input=false
+terraform validate -no-color
+```
+
+O workflow não aplica infraestrutura.
+
+### AWS Fargate E2E
+
+```text
+.github/workflows/aws-fargate-e2e.yml
+```
+
+Orquestra a execução real na AWS e aplica o quality gate remoto.
+
+---
+
+## 📊 Evidências
+
+### Local
+
+```text
+reports/allure-results
+reports/allure-report
+```
+
+### AWS
+
+- logs: CloudWatch Logs;
+- resultados Allure: bucket privado S3;
+- artifact final: GitHub Actions.
+
+A retenção dos recursos AWS é configurável via Terraform.
+
+---
+
+## 🛡️ Segurança aplicada
+
+- nenhuma access key AWS persistente no GitHub;
+- OIDC limitado à branch `release/2.0-aws`;
+- `iam:PassRole` limitado às roles ECS do projeto;
+- S3 com acesso público bloqueado;
+- criptografia server-side no bucket de evidências;
+- security group sem regras de entrada;
+- execução efêmera no Fargate;
+- imagens ECR imutáveis;
+- permissões IAM reduzidas ao necessário sempre que há suporte a resource-level permissions.
 
 ---
 
@@ -415,23 +468,23 @@ O job de execução de testes possui apenas permissões de leitura. `pages: writ
 - cobertura orientada a risco;
 - BDD focado em comportamento;
 - POM para abstração da interface;
-- API-first para pré-condições técnicas;
+- API-first para pré-condições;
 - HTTP encapsulado na camada de serviço;
 - validação backend após operações críticas;
 - dados dinâmicos;
 - isolamento de sessão;
 - `Decimal` para valores monetários;
-- polling com deadline para consistência;
-- janela de estabilização para assertions negativas;
-- ambiente determinístico e descartável;
-- auto-wait e assertions do Playwright;
-- Ruff lint + format check e dry-run de BDD no CI;
-- evidências automáticas;
-- execução reproduzível local/CI.
+- polling com deadline;
+- ambiente determinístico;
+- auto-wait do Playwright;
+- quality gates locais e cloud;
+- infraestrutura como código;
+- autenticação federada com OIDC;
+- evidências automáticas.
 
 ---
 
-## 📈 Resultado de referência
+## 📈 Resultado funcional de referência
 
 Regressão completa esperada:
 
@@ -445,14 +498,23 @@ O número de steps pode evoluir conforme refatorações internas sem alterar a c
 
 ---
 
+## 📚 Documentação adicional
+
+- [`docs/AWS_FARGATE_RUNNER.md`](docs/AWS_FARGATE_RUNNER.md) — arquitetura e operação AWS/Fargate;
+- [`infra/terraform/README.md`](infra/terraform/README.md) — provisionamento e atualização da infraestrutura;
+- [`docs/findings.md`](docs/findings.md) — comportamentos e defeitos conhecidos do ParaBank;
+- [`DOCKER_SETUP.md`](DOCKER_SETUP.md) — preparação do ambiente local.
+
+---
+
 ## 📄 Licença
 
-Este projeto está licenciado sob a **MIT License**. Consulte o arquivo [`LICENSE`](LICENSE) para os termos completos.
+Este projeto está licenciado sob a **MIT License**. Consulte [`LICENSE`](LICENSE).
 
-O ParaBank é um sistema de demonstração da Parasoft e permanece sujeito aos termos aplicáveis do respectivo fornecedor. A licença deste repositório se aplica ao código de automação e aos artefatos produzidos neste projeto.
+O ParaBank é um sistema de demonstração da Parasoft e permanece sujeito aos termos aplicáveis do respectivo fornecedor.
 
 ---
 
 <p align="center">
-  Python · Playwright · Behave · Docker · Ruff · Allure · GitHub Actions
+  Python · Playwright · Behave · Docker · AWS · ECS/Fargate · Terraform · Allure · GitHub Actions
 </p>
