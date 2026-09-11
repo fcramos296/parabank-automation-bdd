@@ -28,7 +28,8 @@ MAC_DOCKER_APP = Path("/Applications/Docker.app")
 MAC_DOCKER_BIN = MAC_DOCKER_APP / "Contents" / "Resources" / "bin"
 
 MINIMUM_WSL_VERSION = (2, 1, 5)
-DOCKER_START_TIMEOUT_SECONDS = 180.0
+DOCKER_START_TIMEOUT_SECONDS = 300.0
+WINDOWS_DOCKER_CLI_TIMEOUT_SECONDS = 30.0
 POLL_INTERVAL_SECONDS = 2.0
 
 
@@ -327,7 +328,7 @@ def _install_windows() -> None:
         )
 
     print("[docker] Instalando Docker Desktop via WinGet...")
-    _run(
+    result = _run(
         [
             "winget",
             "install",
@@ -336,9 +337,44 @@ def _install_windows() -> None:
             "Docker.DockerDesktop",
             "--accept-package-agreements",
             "--accept-source-agreements",
-        ]
+            "--force",
+            "--override",
+            "install --quiet --accept-license --backend=wsl-2",
+        ],
+        check=False,
+        capture_output=True,
+        timeout=600,
     )
+
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip()
+
+        if detail:
+            detail = " Detalhes: " + detail[-1500:]
+
+        raise RuntimeError(
+            "A instalação do Docker Desktop via WinGet falhou "
+            f"com código {result.returncode}.{detail}"
+        )
+
     _refresh_docker_path()
+    print("[docker] Docker Desktop instalado com backend WSL 2.")
+
+
+def _wait_for_windows_docker_cli(
+    timeout_seconds: float = WINDOWS_DOCKER_CLI_TIMEOUT_SECONDS,
+) -> bool:
+    deadline = time.monotonic() + timeout_seconds
+
+    while time.monotonic() < deadline:
+        _refresh_docker_path()
+
+        if shutil.which("docker") is not None:
+            return True
+
+        time.sleep(1)
+
+    return False
 
 
 def _mac_admin_prefix() -> list[str]:
@@ -730,9 +766,15 @@ def ensure_docker(
         _ensure_windows_wsl(install_policy)
 
     if shutil.which("docker") is None:
+        component = (
+            "Docker Desktop com WSL 2 (inclui aceite dos termos do Docker Desktop)"
+            if system == "Windows"
+            else "Docker"
+        )
+
         if not _allowed(
             install_policy,
-            "Docker",
+            component,
             labels[system],
         ):
             raise RuntimeError(
@@ -742,10 +784,16 @@ def ensure_docker(
         _install_docker(system)
         _refresh_docker_path()
 
-        if shutil.which("docker") is None:
+        cli_ready = (
+            _wait_for_windows_docker_cli()
+            if system == "Windows"
+            else shutil.which("docker") is not None
+        )
+
+        if not cli_ready:
             raise RuntimeError(
-                "Docker foi instalado, mas o CLI ainda não está no PATH. "
-                "Abra um novo terminal e execute novamente."
+                "Docker foi instalado, mas o CLI não ficou disponível na "
+                "sessão atual. Feche e abra o terminal e execute novamente."
             )
 
     _start_runtime(system)
