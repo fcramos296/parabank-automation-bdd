@@ -199,23 +199,32 @@ def _windows_elevated(
 
 
 def _ensure_windows_wsl(policy: DockerInstallPolicy) -> None:
-    virtualization = _windows_virtualization()
-
-    if virtualization is False:
-        raise RuntimeError(
-            "A virtualização de hardware está desabilitada no BIOS/UEFI. "
-            "Habilite Intel VT-x/AMD-V e execute novamente."
-        )
-
     version = _windows_wsl_version()
+    status_ok = _windows_wsl_status_ok()
+    virtualization = _windows_virtualization()
 
     if (
         version is not None
         and version >= MINIMUM_WSL_VERSION
-        and _windows_wsl_status_ok()
+        and status_ok
     ):
+        if virtualization is False:
+            print(
+                "[wsl][AVISO] O WMI reportou virtualização de firmware como "
+                "desabilitada, mas o WSL 2 está operacional. "
+                "Continuando com a validação funcional."
+            )
+
         print("[wsl] WSL " + ".".join(str(part) for part in version) + " disponível.")
         return
+
+    if virtualization is False:
+        print(
+            "[wsl][AVISO] O WMI reportou virtualização de firmware como "
+            "desabilitada. Essa propriedade pode retornar falso negativo; "
+            "o bootstrap tentará validar/preparar o WSL 2 antes de concluir "
+            "que existe um bloqueio de firmware."
+        )
 
     if not _allowed(
         policy,
@@ -224,7 +233,7 @@ def _ensure_windows_wsl(policy: DockerInstallPolicy) -> None:
     ):
         raise RuntimeError("WSL 2 não está pronto para o Docker Desktop.")
 
-    if version is None or not _windows_wsl_status_ok():
+    if version is None or not status_ok:
         print("[wsl] Habilitando WSL 2 e Virtual Machine Platform...")
         _windows_elevated(
             "wsl.exe",
@@ -251,12 +260,20 @@ def _ensure_windows_wsl(policy: DockerInstallPolicy) -> None:
     )
 
     version = _windows_wsl_version()
+    status_ok = _windows_wsl_status_ok()
 
-    if version is None or version < MINIMUM_WSL_VERSION or not _windows_wsl_status_ok():
+    if version is None or version < MINIMUM_WSL_VERSION or not status_ok:
+        detail = (
+            " O Windows também reportou a virtualização de firmware como "
+            "desabilitada; se o erro persistir após reiniciar, confirme "
+            "Intel VT-x/AMD-V/SVM no BIOS/UEFI."
+            if virtualization is False
+            else ""
+        )
         raise RuntimeError(
             "WSL/Virtual Machine Platform foram preparados, mas o Windows "
             "precisa concluir a ativação. Reinicie a máquina e execute o "
-            "mesmo comando novamente."
+            f"mesmo comando novamente.{detail}"
         )
 
     print("[wsl] WSL " + ".".join(str(part) for part in version) + " pronto.")
@@ -707,8 +724,9 @@ def ensure_docker(
     if docker_command is None:
         detail = {
             "Windows": (
-                "Verifique reinicialização pendente do WSL/Windows "
-                "ou virtualização do BIOS/UEFI."
+                "Verifique se o WSL 2 concluiu a ativação e se o Docker Desktop "
+                "consegue iniciar. Se o próprio WSL/Docker reportar erro de "
+                "virtualização, confirme Intel VT-x/AMD-V/SVM no BIOS/UEFI."
             ),
             "Darwin": (
                 "Conclua qualquer configuração, permissão ou aceite "
