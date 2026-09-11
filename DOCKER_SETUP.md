@@ -64,8 +64,8 @@ O wrapper procura Python 3.10+ e, quando necessário e autorizado, instala Pytho
 Depois, o bootstrap Docker:
 
 1. verifica uma instalação Docker já funcional;
-2. verifica virtualização de hardware;
-3. valida WSL 2;
+2. valida primeiro se o WSL 2 está instalado e operacional;
+3. usa a informação de virtualização do WMI apenas como diagnóstico auxiliar;
 4. atualiza WSL quando necessário;
 5. habilita WSL/Virtual Machine Platform quando autorizado;
 6. informa claramente quando uma reinicialização do Windows é necessária;
@@ -74,7 +74,9 @@ Depois, o bootstrap Docker:
 9. espera `docker info` responder;
 10. valida Docker Compose.
 
-Virtualização Intel VT-x/AMD-V desabilitada no BIOS/UEFI não é alterada pelo projeto. Nesse caso, o runner informa o requisito pendente.
+A propriedade `Win32_Processor.VirtualizationFirmwareEnabled` pode retornar falso negativo em alguns hosts Windows. Por isso, o bootstrap não bloqueia mais a execução apenas com base nesse valor quando o WSL 2 está funcional.
+
+Virtualização Intel VT-x/AMD-V/SVM realmente desabilitada no BIOS/UEFI continua sendo um requisito externo ao projeto. Quando WSL/Docker também falham e o Windows reporta problema de virtualização, o runner orienta a validação do firmware.
 
 ## Linux
 
