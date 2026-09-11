@@ -1,0 +1,23 @@
+FROM mcr.microsoft.com/playwright/python:v1.62.0-noble
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /workspace
+
+COPY requirements.txt ./
+RUN python -m pip install --upgrade pip \
+    && python -m pip install -r requirements.txt
+
+COPY behave.ini pyproject.toml ./
+COPY config ./config
+COPY features ./features
+COPY pages ./pages
+COPY services ./services
+COPY utils ./utils
+COPY scripts ./scripts
+
+RUN mkdir -p reports/allure-results
+
+ENTRYPOINT ["python", "scripts/run_container.py"]
