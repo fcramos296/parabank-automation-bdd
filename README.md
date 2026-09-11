@@ -17,104 +17,73 @@
   <img src="https://img.shields.io/badge/BDD-Behave-6A5ACD" alt="Behave BDD" />
   <img src="https://img.shields.io/badge/AWS-ECS%20Fargate-FF9900?logo=amazonaws&logoColor=white" alt="AWS ECS Fargate" />
   <img src="https://img.shields.io/badge/IaC-Terraform-844FBA?logo=terraform&logoColor=white" alt="Terraform" />
+  <img src="https://img.shields.io/badge/Release-v2.0-blue" alt="Release v2.0" />
   <img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License" />
 </p>
 
 ---
 
-## 📌 Versionamento do projeto
+## Status da versão 2.0
 
-O repositório mantém duas linhas independentes:
+A versão **v2.0** está homologada para execução em AWS ECS/Fargate e é mantida na branch:
+
+```text
+release/2.0-aws
+```
+
+A release `v2.0` aponta para o commit homologado da linha AWS. A `main` continua representando a linha estável 1.x e não recebe merge automático da arquitetura cloud.
+
+Homologação final da 2.0:
+
+```text
+AWS Fargate E2E #7
+3 features passed
+3 scenarios passed
+16 steps passed
+0 failed
+Quality Gate passed
+```
+
+Além da execução Fargate, também foi validado um **clone limpo** do repositório usando o backend remoto do Terraform, sem cópia manual de state e sem novos imports.
+
+---
+
+## Versionamento do projeto
 
 | Versão | Branch | Objetivo |
 | --- | --- | --- |
 | **1.x** | `main` | versão estável com execução local em Docker e pipeline original |
 | **2.0** | `release/2.0-aws` | versão cloud com runner containerizado e execução em AWS ECS/Fargate |
 
-A versão 2.0 **não será mergeada na `main`**. As duas implementações permanecem disponíveis e podem evoluir de forma independente.
-
-A antiga branch `feat/aws-fargate-e2e` representa o histórico de desenvolvimento da versão AWS. A branch mantida para a linha 2.0 é `release/2.0-aws`.
+A antiga branch `feat/aws-fargate-e2e` permanece apenas como histórico de desenvolvimento da versão AWS.
 
 ---
 
-## 📌 Sobre o projeto
+## Sobre o projeto
 
 O projeto automatiza os fluxos de **Login/Logout**, **Registro de Usuário** e **Transferência de Fundos** do ParaBank.
 
-A solução foi construída como um framework de QA Automation sustentável, com:
+A solução aplica práticas de QA Automation voltadas a manutenção, isolamento e confiabilidade:
 
-- isolamento de dados por cenário;
 - Page Object Model;
-- pré-condições via API;
+- BDD com Behave/Gherkin;
+- pré-condições técnicas via API;
 - validações UI + backend;
-- ambiente determinístico e descartável;
-- execução local e containerizada;
-- quality gates em CI/CD;
-- evidências Allure;
-- infraestrutura AWS definida como código.
-
-A versão 2.0 preserva a cobertura funcional já estabilizada e adiciona uma segunda camada de execução orientada a cloud.
-
----
-
-## ✨ Destaques
-
-- **24 cenários E2E** orientados a risco e regra de negócio;
 - massa exclusiva e dinâmica por cenário;
 - `BrowserContext` independente por cenário;
-- API-first para pré-condições técnicas;
-- validações cruzadas entre interface e backend;
 - `Decimal` para valores monetários;
 - polling com deadline em vez de sleeps fixos;
-- ParaBank descartável em Docker;
-- runner Playwright/Behave containerizado;
-- validação local do runner com Docker Compose;
-- Terraform para infraestrutura AWS;
-- autenticação GitHub → AWS por OIDC, sem access keys persistentes;
-- runner publicado em Amazon ECR;
-- execução efêmera em Amazon ECS/Fargate;
-- logs em CloudWatch;
-- resultados Allure persistidos em S3 e publicados como artifact do GitHub Actions;
-- quality gate baseado no exit code real do container de testes.
+- execução local determinística com Docker;
+- execução remota efêmera com AWS Fargate;
+- quality gates em CI/CD;
+- evidências Allure;
+- infraestrutura como código com Terraform.
 
 ---
 
-## 🧰 Stack
+## Cobertura funcional
 
-| Tecnologia | Responsabilidade |
-| --- | --- |
-| **Python** | linguagem principal do framework |
-| **Playwright** | automação web e assertions de interface |
-| **Behave / Gherkin** | BDD e especificação dos comportamentos |
-| **Requests** | setup e validações de backend |
-| **Pydantic Settings** | configuração do ambiente e timeouts |
-| **Docker / Compose** | ambiente local e validação do runner containerizado |
-| **Ruff** | análise estática e formatação |
-| **Allure** | evidências e resultados de execução |
-| **GitHub Actions** | CI/CD e orquestração da execução AWS |
-| **Terraform** | infraestrutura como código |
-| **Amazon ECR** | registry da imagem do runner |
-| **Amazon ECS/Fargate** | execução efêmera dos testes |
-| **Amazon S3** | persistência de resultados Allure |
-| **CloudWatch Logs** | logs dos containers |
-| **GitHub OIDC / IAM** | autenticação federada entre GitHub Actions e AWS |
-
----
-
-## 🧠 Estratégia de testes
-
-A automação separa claramente pré-condição, comportamento e validação persistida:
-
-```text
-pré-condição técnica      → API / backend
-comportamento do usuário  → UI / Playwright
-efeito persistido         → API / backend
-evidência                 → Allure
-```
-
-Isso evita executar pela interface etapas que não pertencem ao comportamento em teste e reduz tempo, acoplamento e flakiness.
-
-### 🔐 Login e Logout — 10 cenários
+### Login e Logout — 10 cenários
 
 Cobertura principal:
 
@@ -127,7 +96,7 @@ Cobertura principal:
 - logout;
 - bloqueio de área protegida após logout.
 
-### 👤 Registro de Usuário — 6 cenários
+### Registro de Usuário — 6 cenários
 
 Cobertura principal:
 
@@ -142,7 +111,7 @@ Cobertura principal:
 - confirmação de senha divergente;
 - username duplicado.
 
-### 💸 Transferência de Fundos — 8 cenários
+### Transferência de Fundos — 8 cenários
 
 Cobertura principal:
 
@@ -153,13 +122,57 @@ Cobertura principal:
 - validação de saldo final;
 - isolamento das contas exibidas;
 - entradas inválidas;
-- verificação das transações debit/credit no backend.
+- verificação de débito/crédito no backend.
 
-Os casos conhecidos de entrada monetária inválida permanecem documentados em [`docs/findings.md`](docs/findings.md).
+Total da regressão:
+
+```text
+3 features
+24 scenarios
+```
+
+Comportamentos conhecidos do ParaBank permanecem registrados em [`docs/findings.md`](docs/findings.md).
 
 ---
 
-## 🏗️ Arquitetura 2.0
+## Stack
+
+| Tecnologia | Responsabilidade |
+| --- | --- |
+| **Python** | linguagem principal do framework |
+| **Playwright** | automação web e assertions de interface |
+| **Behave / Gherkin** | BDD e especificação dos comportamentos |
+| **Requests** | setup e validações de backend |
+| **Pydantic Settings** | configuração e timeouts |
+| **Docker / Compose** | ambiente local e runner containerizado |
+| **Ruff** | lint e formatação |
+| **Allure** | evidências de execução |
+| **GitHub Actions** | CI/CD e orquestração AWS |
+| **Terraform** | infraestrutura como código |
+| **Amazon ECR** | registry da imagem do runner |
+| **Amazon ECS/Fargate** | execução efêmera dos testes |
+| **Amazon S3** | Allure e backend remoto do Terraform |
+| **CloudWatch Logs** | logs dos containers |
+| **GitHub OIDC / IAM** | autenticação federada GitHub → AWS |
+
+---
+
+## Estratégia de testes
+
+A automação separa pré-condição, comportamento e validação persistida:
+
+```text
+pré-condição técnica      → API / backend
+comportamento do usuário  → UI / Playwright
+efeito persistido         → API / backend
+evidência                 → Allure
+```
+
+Essa separação reduz tempo de execução, acoplamento e flakiness.
+
+---
+
+## Arquitetura 2.0
 
 ```text
 GitHub Actions
@@ -188,17 +201,17 @@ Amazon ECS / Fargate
                       GitHub Actions artifact
 ```
 
-Os containers `parabank` e `tests` executam na mesma task Fargate. O runner acessa o SUT por:
+Os containers `parabank` e `tests` executam na mesma task Fargate. O runner acessa o SUT diretamente em:
 
 ```text
 http://localhost:8080/parabank
 ```
 
-Por isso a aplicação não precisa ser exposta por load balancer ou regra de entrada.
+Por isso não há necessidade de load balancer nem regra de entrada no security group.
 
 ---
 
-## 📁 Estrutura relevante
+## Estrutura relevante
 
 ```text
 .
@@ -231,9 +244,7 @@ Por isso a aplicação não precisa ser exposta por load balancer ou regra de en
 
 ---
 
-## 🐳 Execução local tradicional
-
-A execução local da suíte continua disponível:
+## Execução local
 
 ### Windows
 
@@ -241,7 +252,7 @@ A execução local da suíte continua disponível:
 run_tests.bat
 ```
 
-Ou:
+ou:
 
 ```powershell
 python scripts/run.py
@@ -254,7 +265,7 @@ chmod +x run_tests.sh
 ./run_tests.sh
 ```
 
-Ou:
+ou:
 
 ```bash
 python3 scripts/run.py
@@ -262,9 +273,7 @@ python3 scripts/run.py
 
 ---
 
-## 📦 Validação do runner containerizado
-
-A mesma suíte pode ser executada usando o container de testes usado como base da arquitetura AWS.
+## Runner containerizado
 
 Suíte completa:
 
@@ -288,9 +297,9 @@ reports/allure-results
 
 ---
 
-## ☁️ Infraestrutura AWS
+## Infraestrutura AWS
 
-A definição Terraform está em:
+A infraestrutura da versão 2.0 está em:
 
 ```text
 infra/terraform/
@@ -301,27 +310,99 @@ Principais recursos:
 - VPC dedicada;
 - duas subnets públicas;
 - security group sem ingress;
-- ECR;
-- ECS cluster;
+- Amazon ECR;
+- cluster ECS `parabank-qa-test`;
 - task definition Fargate;
 - CloudWatch log group;
-- S3 privado para Allure;
+- bucket S3 privado para Allure;
 - ECS execution role;
 - ECS task role;
 - GitHub Actions role;
 - GitHub OIDC provider.
 
-Detalhes: [`infra/terraform/README.md`](infra/terraform/README.md).
+A região utilizada pelo ambiente homologado é:
+
+```text
+us-east-1
+```
+
+No console AWS, a execução pode ser acompanhada em:
+
+```text
+ECS → Clusters → parabank-qa-test → Tasks
+```
+
+Logs:
+
+```text
+CloudWatch → Log groups → /ecs/parabank-qa-test
+```
+
+Detalhes adicionais: [`infra/terraform/README.md`](infra/terraform/README.md).
 
 ---
 
-## 🔐 GitHub OIDC
+## Terraform state remoto
 
-A versão 2.0 não utiliza AWS access key e secret key persistentes no GitHub Actions.
+A versão 2.0 utiliza um backend remoto S3 dedicado para o Terraform, separado do bucket de evidências Allure.
 
-O workflow solicita um token OIDC do GitHub e assume uma IAM role criada pelo Terraform.
+O backend possui:
 
-A trust policy está restrita a:
+- criptografia server-side;
+- versionamento;
+- public access block;
+- locking nativo via `use_lockfile = true`.
+
+O state recuperado foi migrado para esse backend e o fluxo de clone limpo foi validado com sucesso.
+
+### Clone novo
+
+Depois que o backend já existe, não é necessário copiar `terraform.tfstate`, executar imports ou rodar novamente o bootstrap.
+
+```powershell
+git clone https://github.com/fcramos296/parabank-automation-bdd.git
+cd parabank-automation-bdd
+git switch release/2.0-aws
+
+$env:AWS_PROFILE="parabank"
+
+cd infra\terraform
+terraform init
+terraform plan
+```
+
+Resultado esperado em um ambiente sincronizado:
+
+```text
+No changes. Your infrastructure matches the configuration.
+```
+
+### Bootstrap do backend
+
+O script `infra/terraform/bootstrap_backend.ps1` existe apenas para a criação/configuração inicial do bucket de state.
+
+```powershell
+$env:AWS_PROFILE="parabank"
+powershell -ExecutionPolicy Bypass -File .\bootstrap_backend.ps1
+```
+
+Para migrar um state local existente:
+
+```powershell
+terraform init -migrate-state
+```
+
+Não combine `-migrate-state` com `-reconfigure`.
+
+---
+
+## GitHub OIDC
+
+A versão 2.0 não utiliza AWS access key/secret key persistentes no GitHub Actions.
+
+O workflow obtém um token OIDC do GitHub e assume a IAM role criada pelo Terraform.
+
+A trust policy aplicada no ambiente homologado está restrita a:
 
 ```text
 refs/heads/release/2.0-aws
@@ -329,11 +410,9 @@ refs/heads/release/2.0-aws
 
 A `main` não está autorizada a assumir a role AWS da versão 2.0.
 
-> Se a infraestrutura AWS existente ainda estiver configurada com a antiga branch de desenvolvimento, execute um novo `terraform apply` uma vez para atualizar a trust policy real da IAM role.
-
 ---
 
-## 🚀 Execução AWS Fargate
+## AWS Fargate E2E
 
 Workflow:
 
@@ -341,9 +420,7 @@ Workflow:
 .github/workflows/aws-fargate-e2e.yml
 ```
 
-A execução é manual via `workflow_dispatch`.
-
-Entradas disponíveis:
+A execução é manual via `workflow_dispatch` e permite informar:
 
 - expressão de tags do Behave;
 - browser: `chromium`, `firefox` ou `webkit`.
@@ -378,14 +455,45 @@ artifact no GitHub Actions
 quality gate
 ```
 
-A execução só passa quando:
+A execução somente passa quando:
 
-1. o container `tests` finaliza com exit code `0`;
-2. os resultados Allure são recuperados com sucesso.
+1. o container `tests` termina com exit code `0`;
+2. os resultados Allure são recuperados do S3;
+3. o quality gate final é aprovado.
+
+### Homologação final
+
+A execução `AWS Fargate E2E #7`, realizada na `release/2.0-aws`, validou:
+
+- OIDC GitHub → AWS;
+- login e push no ECR;
+- criação de nova revisão da task definition;
+- execução real em Fargate;
+- ParaBank disponível em `localhost:8080/parabank`;
+- smoke suite em Chromium;
+- CloudWatch Logs;
+- upload Allure para S3;
+- download das evidências para GitHub Actions;
+- Quality Gate.
+
+Resultado funcional:
+
+```text
+3 features passed
+3 scenarios passed
+16 steps passed
+0 failed
+```
+
+Artifact produzido:
+
+```text
+aws-fargate-allure-7
+```
 
 ---
 
-## 🔄 CI/CD da versão 2.0
+## CI/CD da versão 2.0
 
 ### Container Runner Validation
 
@@ -393,15 +501,13 @@ A execução só passa quando:
 .github/workflows/container-runner.yml
 ```
 
-Executa na `release/2.0-aws` quando arquivos relacionados ao runner são alterados.
-
 Valida:
 
-- build do container;
+- build do runner;
 - inicialização do ParaBank;
 - smoke suite;
-- geração de evidências;
-- cleanup do ambiente.
+- evidências;
+- cleanup.
 
 ### Terraform Validation
 
@@ -417,7 +523,7 @@ terraform init -backend=false -input=false
 terraform validate -no-color
 ```
 
-O workflow não aplica infraestrutura.
+Esse workflow não aplica infraestrutura.
 
 ### AWS Fargate E2E
 
@@ -429,7 +535,7 @@ Orquestra a execução real na AWS e aplica o quality gate remoto.
 
 ---
 
-## 📊 Evidências
+## Evidências
 
 ### Local
 
@@ -444,70 +550,55 @@ reports/allure-report
 - resultados Allure: bucket privado S3;
 - artifact final: GitHub Actions.
 
-A retenção dos recursos AWS é configurável via Terraform.
-
 ---
 
-## 🛡️ Segurança aplicada
+## Segurança aplicada
 
 - nenhuma access key AWS persistente no GitHub;
-- OIDC limitado à branch `release/2.0-aws`;
+- OIDC limitado à `release/2.0-aws`;
 - `iam:PassRole` limitado às roles ECS do projeto;
-- S3 com acesso público bloqueado;
-- criptografia server-side no bucket de evidências;
+- bucket Allure com acesso público bloqueado;
+- bucket Terraform state privado, criptografado e versionado;
+- locking nativo do state no S3;
 - security group sem regras de entrada;
 - execução efêmera no Fargate;
 - imagens ECR imutáveis;
-- permissões IAM reduzidas ao necessário sempre que há suporte a resource-level permissions.
+- permissões IAM reduzidas ao necessário.
 
 ---
 
-## ✅ Boas práticas aplicadas
+## Boas práticas aplicadas
 
 - cenários independentes;
 - cobertura orientada a risco;
 - BDD focado em comportamento;
-- POM para abstração da interface;
+- Page Object Model;
 - API-first para pré-condições;
-- HTTP encapsulado na camada de serviço;
+- camada de serviço para HTTP;
 - validação backend após operações críticas;
 - dados dinâmicos;
 - isolamento de sessão;
 - `Decimal` para valores monetários;
 - polling com deadline;
-- ambiente determinístico;
 - auto-wait do Playwright;
+- ambiente determinístico;
 - quality gates locais e cloud;
 - infraestrutura como código;
-- autenticação federada com OIDC;
+- autenticação federada OIDC;
 - evidências automáticas.
 
 ---
 
-## 📈 Resultado funcional de referência
-
-Regressão completa esperada:
-
-```text
-3 features
-24 scenarios
-0 failed
-```
-
-O número de steps pode evoluir conforme refatorações internas sem alterar a cobertura funcional declarada.
-
----
-
-## 📚 Documentação adicional
+## Documentação adicional
 
 - [`docs/AWS_FARGATE_RUNNER.md`](docs/AWS_FARGATE_RUNNER.md) — arquitetura e operação AWS/Fargate;
-- [`infra/terraform/README.md`](infra/terraform/README.md) — provisionamento e atualização da infraestrutura;
+- [`infra/terraform/README.md`](infra/terraform/README.md) — infraestrutura, backend remoto e operação Terraform;
 - [`docs/findings.md`](docs/findings.md) — comportamentos e defeitos conhecidos do ParaBank;
 - [`DOCKER_SETUP.md`](DOCKER_SETUP.md) — preparação do ambiente local.
 
 ---
 
-## 📄 Licença
+## Licença
 
 Este projeto está licenciado sob a **MIT License**. Consulte [`LICENSE`](LICENSE).
 
