@@ -111,4 +111,12 @@ resource "aws_ecs_task_definition" "qa" {
       }
     }
   ])
+
+  # Terraform bootstraps the task definition, while GitHub Actions owns the
+  # runtime container revision by replacing the tests image with an immutable
+  # commit-tagged ECR image. Ignore that CI-managed drift so a later plan does
+  # not attempt to roll the task back to the bootstrap image.
+  lifecycle {
+    ignore_changes = [container_definitions]
+  }
 }
