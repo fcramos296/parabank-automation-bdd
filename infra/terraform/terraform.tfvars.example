@@ -1,0 +1,20 @@
+aws_region  = "us-east-1"
+project_name = "parabank-qa"
+environment  = "test"
+
+github_repository = "fcramos296/parabank-automation-bdd"
+github_allowed_refs = [
+  "refs/heads/main",
+  "refs/heads/feat/aws-fargate-e2e",
+]
+
+runner_image_tag = "bootstrap"
+parabank_image   = "parasoft/parabank:baseline"
+
+task_cpu    = 2048
+task_memory = 4096
+
+log_retention_days    = 14
+allure_retention_days = 30
+
+vpc_cidr = "10.42.0.0/16"
