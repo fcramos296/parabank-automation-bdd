@@ -8,16 +8,11 @@ import time
 from pathlib import Path
 from typing import Sequence
 
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
 from config.settings import settings
 from scripts.parabank_env import parabank_is_ready
 
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 REPORTS_DIR = PROJECT_ROOT / "reports"
 ALLURE_RESULTS_DIR = REPORTS_DIR / "allure-results"
 SUPPORTED_BROWSERS = ("chromium", "firefox", "webkit")
