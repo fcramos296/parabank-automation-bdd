@@ -38,13 +38,12 @@ variable "github_allowed_refs" {
   description = "Exact Git refs allowed to assume the GitHub Actions OIDC role."
   type        = list(string)
   default = [
-    "refs/heads/main",
-    "refs/heads/feat/aws-fargate-e2e",
+    "refs/heads/release/2.0-aws",
   ]
 }
 
 variable "runner_image_tag" {
-  description = "Image tag referenced by the bootstrap ECS task definition. CI will later register revisions using commit-SHA tags."
+  description = "Image tag referenced by the bootstrap ECS task definition. CI registers later revisions using immutable run-specific tags."
   type        = string
   default     = "bootstrap"
 }
