@@ -1,0 +1,427 @@
+name: AWS Fargate E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: Behave tag expression
+        required: true
+        default: "@smoke"
+        type: string
+
+      browser:
+        description: Playwright browser
+        required: true
+        default: chromium
+        type: choice
+        options:
+          - chromium
+          - firefox
+          - webkit
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: aws-fargate-e2e-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  AWS_ROLE_ARN: ${{ vars.AWS_ROLE_ARN }}
+
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+
+  ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+  ECS_TASK_FAMILY: ${{ vars.ECS_TASK_FAMILY }}
+
+  FARGATE_SUBNETS: ${{ vars.FARGATE_SUBNETS }}
+  FARGATE_SECURITY_GROUP: ${{ vars.FARGATE_SECURITY_GROUP }}
+
+  ALLURE_BUCKET: ${{ vars.ALLURE_BUCKET }}
+  CLOUDWATCH_LOG_GROUP: ${{ vars.CLOUDWATCH_LOG_GROUP }}
+
+jobs:
+  fargate-e2e:
+    name: Fargate E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Configure AWS credentials through OIDC
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          allowed-account-ids: ${{ env.AWS_ACCOUNT_ID }}
+          role-session-name: gh-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Verify AWS identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          aws sts get-caller-identity
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push test runner
+        id: image
+        shell: bash
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+        run: |
+          set -euo pipefail
+
+          IMAGE_TAG="${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          IMAGE_URI="${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+
+          echo "Building ${IMAGE_URI}"
+
+          docker build \
+            -f Dockerfile.tests \
+            -t "${IMAGE_URI}" \
+            .
+
+          docker push "${IMAGE_URI}"
+
+          echo "uri=${IMAGE_URI}" >> "${GITHUB_OUTPUT}"
+          echo "tag=${IMAGE_TAG}" >> "${GITHUB_OUTPUT}"
+
+      - name: Create new ECS task definition revision
+        id: task-definition
+        shell: bash
+        env:
+          IMAGE_URI: ${{ steps.image.outputs.uri }}
+        run: |
+          set -euo pipefail
+
+          aws ecs describe-task-definition \
+            --task-definition "${ECS_TASK_FAMILY}" \
+            --query taskDefinition \
+            --output json \
+            > current-task-definition.json
+
+          jq \
+            --arg image "${IMAGE_URI}" \
+            '
+            .containerDefinitions |= map(
+              if .name == "tests"
+              then .image = $image
+              else .
+              end
+            )
+            |
+            del(
+              .taskDefinitionArn,
+              .revision,
+              .status,
+              .requiresAttributes,
+              .compatibilities,
+              .registeredAt,
+              .registeredBy,
+              .deregisteredAt
+            )
+            ' \
+            current-task-definition.json \
+            > task-definition.json
+
+          NEW_TASK_DEFINITION_ARN="$(
+            aws ecs register-task-definition \
+              --cli-input-json file://task-definition.json \
+              --query 'taskDefinition.taskDefinitionArn' \
+              --output text
+          )"
+
+          echo "Registered ${NEW_TASK_DEFINITION_ARN}"
+
+          echo "arn=${NEW_TASK_DEFINITION_ARN}" >> "${GITHUB_OUTPUT}"
+
+      - name: Prepare Fargate execution configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          jq \
+            -n \
+            --arg subnets "${FARGATE_SUBNETS}" \
+            --arg security_group "${FARGATE_SECURITY_GROUP}" \
+            '
+            {
+              awsvpcConfiguration: {
+                subnets: ($subnets | split(",")),
+                securityGroups: [$security_group],
+                assignPublicIp: "ENABLED"
+              }
+            }
+            ' \
+            > ecs-network.json
+
+          jq \
+            -n \
+            --arg tags '${{ inputs.tags }}' \
+            --arg browser '${{ inputs.browser }}' \
+            '
+            {
+              containerOverrides: [
+                {
+                  name: "tests",
+                  command: [
+                    "--tags",
+                    $tags,
+                    "--browser",
+                    $browser
+                  ]
+                }
+              ]
+            }
+            ' \
+            > ecs-overrides.json
+
+          echo "Network configuration:"
+          cat ecs-network.json
+
+          echo "Container overrides:"
+          cat ecs-overrides.json
+
+      - name: Start Fargate task
+        id: run-task
+        shell: bash
+        env:
+          TASK_DEFINITION_ARN: ${{ steps.task-definition.outputs.arn }}
+        run: |
+          set -euo pipefail
+
+          RUN_OUTPUT="$(
+            aws ecs run-task \
+              --cluster "${ECS_CLUSTER}" \
+              --launch-type FARGATE \
+              --task-definition "${TASK_DEFINITION_ARN}" \
+              --network-configuration file://ecs-network.json \
+              --overrides file://ecs-overrides.json \
+              --count 1 \
+              --output json
+          )"
+
+          echo "${RUN_OUTPUT}" > ecs-run-task.json
+
+          FAILURE_COUNT="$(
+            echo "${RUN_OUTPUT}" |
+              jq '.failures | length'
+          )"
+
+          if [[ "${FAILURE_COUNT}" != "0" ]]; then
+            echo "ECS failed to start the task."
+            echo "${RUN_OUTPUT}" | jq '.failures'
+            exit 1
+          fi
+
+          TASK_ARN="$(
+            echo "${RUN_OUTPUT}" |
+              jq -r '.tasks[0].taskArn'
+          )"
+
+          if [[ -z "${TASK_ARN}" || "${TASK_ARN}" == "null" ]]; then
+            echo "ECS did not return a task ARN."
+            exit 1
+          fi
+
+          echo "Fargate task: ${TASK_ARN}"
+
+          echo "task_arn=${TASK_ARN}" >> "${GITHUB_OUTPUT}"
+
+      - name: Wait for Fargate task
+        shell: bash
+        env:
+          TASK_ARN: ${{ steps.run-task.outputs.task_arn }}
+        run: |
+          set -euo pipefail
+
+          echo "Waiting for ${TASK_ARN}..."
+
+          aws ecs wait tasks-stopped \
+            --cluster "${ECS_CLUSTER}" \
+            --tasks "${TASK_ARN}"
+
+      - name: Inspect Fargate result
+        id: result
+        shell: bash
+        env:
+          TASK_ARN: ${{ steps.run-task.outputs.task_arn }}
+        run: |
+          set -euo pipefail
+
+          aws ecs describe-tasks \
+            --cluster "${ECS_CLUSTER}" \
+            --tasks "${TASK_ARN}" \
+            --output json \
+            > ecs-task-result.json
+
+          cat ecs-task-result.json | jq '
+            .tasks[0] |
+            {
+              lastStatus,
+              stopCode,
+              stoppedReason,
+              containers: [
+                .containers[] |
+                {
+                  name,
+                  lastStatus,
+                  exitCode,
+                  reason
+                }
+              ]
+            }
+          '
+
+          TEST_EXIT_CODE="$(
+            jq -r '
+              .tasks[0].containers[]
+              |
+              select(.name == "tests")
+              |
+              .exitCode
+            ' ecs-task-result.json
+          )"
+
+          TASK_ID="${TASK_ARN##*/}"
+
+          echo "Tests exit code: ${TEST_EXIT_CODE}"
+          echo "Task ID: ${TASK_ID}"
+
+          echo "test_exit_code=${TEST_EXIT_CODE}" >> "${GITHUB_OUTPUT}"
+          echo "task_id=${TASK_ID}" >> "${GITHUB_OUTPUT}"
+
+      - name: Print CloudWatch test logs
+        if: always()
+        shell: bash
+        env:
+          TASK_ID: ${{ steps.result.outputs.task_id }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${TASK_ID}" ]]; then
+            echo "Task ID is unavailable."
+            exit 0
+          fi
+
+          LOG_STREAM="$(
+            aws logs describe-log-streams \
+              --log-group-name "${CLOUDWATCH_LOG_GROUP}" \
+              --log-stream-name-prefix "tests/tests/${TASK_ID}" \
+              --query 'logStreams[0].logStreamName' \
+              --output text
+          )"
+
+          if [[ -z "${LOG_STREAM}" || "${LOG_STREAM}" == "None" ]]; then
+            echo "Test log stream was not found."
+            exit 0
+          fi
+
+          echo "CloudWatch stream: ${LOG_STREAM}"
+
+          aws logs get-log-events \
+            --log-group-name "${CLOUDWATCH_LOG_GROUP}" \
+            --log-stream-name "${LOG_STREAM}" \
+            --output json \
+            |
+            jq -r '.events[].message'
+
+      - name: Download Allure results from S3
+        if: always()
+        shell: bash
+        env:
+          TASK_ID: ${{ steps.result.outputs.task_id }}
+        run: |
+          set -euo pipefail
+
+          mkdir -p reports/allure-results
+
+          if [[ -z "${TASK_ID}" ]]; then
+            echo "Task ID is unavailable."
+            exit 0
+          fi
+
+          S3_URI="s3://${ALLURE_BUCKET}/tasks/${TASK_ID}/allure-results/"
+
+          echo "Downloading ${S3_URI}"
+
+          aws s3 cp \
+            "${S3_URI}" \
+            reports/allure-results/ \
+            --recursive
+
+          echo "Downloaded Allure artifacts:"
+
+          find reports/allure-results \
+            -type f \
+            -print
+
+      - name: Upload Allure results to GitHub
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: aws-fargate-allure-${{ github.run_number }}
+          path: reports/allure-results
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Stop task if still running
+        if: always() && steps.run-task.outputs.task_arn != ''
+        shell: bash
+        env:
+          TASK_ARN: ${{ steps.run-task.outputs.task_arn }}
+        run: |
+          set +e
+
+          STATUS="$(
+            aws ecs describe-tasks \
+              --cluster "${ECS_CLUSTER}" \
+              --tasks "${TASK_ARN}" \
+              --query 'tasks[0].lastStatus' \
+              --output text
+          )"
+
+          if [[ "${STATUS}" != "STOPPED" ]]; then
+            echo "Stopping ${TASK_ARN}"
+
+            aws ecs stop-task \
+              --cluster "${ECS_CLUSTER}" \
+              --task "${TASK_ARN}" \
+              --reason "GitHub Actions cleanup"
+          fi
+
+      - name: Quality gate
+        if: always()
+        shell: bash
+        env:
+          TEST_EXIT_CODE: ${{ steps.result.outputs.test_exit_code }}
+        run: |
+          set -euo pipefail
+
+          if [[ "${TEST_EXIT_CODE}" != "0" ]]; then
+            echo "Fargate tests failed with exit code ${TEST_EXIT_CODE}."
+            exit 1
+          fi
+
+          ARTIFACT_COUNT="$(
+            find reports/allure-results \
+              -type f \
+              | wc -l
+          )"
+
+          echo "Allure artifact count: ${ARTIFACT_COUNT}"
+
+          if [[ "${ARTIFACT_COUNT}" -eq 0 ]]; then
+            echo "No Allure artifacts were retrieved from S3."
+            exit 1
+          fi
+
+          echo "AWS Fargate E2E quality gate passed."
