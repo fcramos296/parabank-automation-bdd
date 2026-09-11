@@ -148,9 +148,38 @@ def _windows_virtualization() -> bool | None:
 
 
 def _windows_wsl_version() -> tuple[int, int, int] | None:
+    # Capture and parse WSL output inside PowerShell. On some localized Windows
+    # installations wsl.exe writes redirected output using an encoding that
+    # Python's default text decoding does not interpret reliably. Returning
+    # only ASCII digits from PowerShell avoids locale/encoding false negatives.
+    powershell = (
+        "$raw = & wsl.exe --version 2>&1; "
+        "$exitCode = $LASTEXITCODE; "
+        "if ($exitCode -ne 0) { exit $exitCode }; "
+        "$line = $raw | Where-Object { "
+        "[string]$_ -match 'WSL.*?([0-9]+)\\.([0-9]+)\\.([0-9]+)' "
+        "} | Select-Object -First 1; "
+        "if ($null -eq $line) { "
+        "$line = $raw | Where-Object { "
+        "[string]$_ -match '([0-9]+)\\.([0-9]+)\\.([0-9]+)' "
+        "} | Select-Object -First 1 "
+        "}; "
+        "if ($null -eq $line) { exit 1 }; "
+        "$m = [regex]::Match([string]$line, "
+        "'([0-9]+)\\.([0-9]+)\\.([0-9]+)'); "
+        "if (-not $m.Success) { exit 1 }; "
+        "Write-Output ($m.Groups[1].Value + '.' + "
+        "$m.Groups[2].Value + '.' + $m.Groups[3].Value)"
+    )
+
     try:
         result = _run(
-            ["wsl.exe", "--version"],
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-Command",
+                powershell,
+            ],
             check=False,
             capture_output=True,
             timeout=20,
@@ -161,8 +190,7 @@ def _windows_wsl_version() -> tuple[int, int, int] | None:
     if result.returncode != 0:
         return None
 
-    text = f"{result.stdout}\n{result.stderr}"
-    match = re.search(r"(\d+)\.(\d+)\.(\d+)", text)
+    match = re.search(r"(\d+)\.(\d+)\.(\d+)", result.stdout)
 
     if match is None:
         return None
