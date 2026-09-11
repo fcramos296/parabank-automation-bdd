@@ -1,6 +1,6 @@
 resource "aws_s3_bucket" "allure" {
   bucket_prefix = "${local.name_prefix}-allure-"
-  force_destroy = true
+  force_destroy = false
 }
 
 resource "aws_s3_bucket_public_access_block" "allure" {
