@@ -158,6 +158,9 @@ def _windows_wsl_version() -> tuple[int, int, int] | None:
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return None
 
+    if result.returncode != 0:
+        return None
+
     text = f"{result.stdout}\n{result.stderr}"
     match = re.search(r"(\d+)\.(\d+)\.(\d+)", text)
 
@@ -198,32 +201,42 @@ def _windows_elevated(
     )
 
 
+def _print_wsl_diagnostics(
+    version: tuple[int, int, int],
+    virtualization: bool | None,
+) -> None:
+    if virtualization is False:
+        print(
+            "[wsl][AVISO] O WMI reportou virtualização de firmware como "
+            "desabilitada, mas o WSL está instalado. A propriedade WMI pode "
+            "retornar falso negativo; a validação funcional continuará."
+        )
+
+    if not _windows_wsl_status_ok():
+        print(
+            "[wsl][AVISO] 'wsl --status' não retornou sucesso. Isso pode ocorrer "
+            "sem uma distribuição instalada ou por um aviso de rede do WSL. "
+            "Como 'wsl --version' está válido, o bootstrap continuará e o "
+            "Docker será a validação funcional definitiva."
+        )
+
+    print("[wsl] WSL " + ".".join(str(part) for part in version) + " disponível.")
+
+
 def _ensure_windows_wsl(policy: DockerInstallPolicy) -> None:
     version = _windows_wsl_version()
-    status_ok = _windows_wsl_status_ok()
     virtualization = _windows_virtualization()
 
-    if (
-        version is not None
-        and version >= MINIMUM_WSL_VERSION
-        and status_ok
-    ):
-        if virtualization is False:
-            print(
-                "[wsl][AVISO] O WMI reportou virtualização de firmware como "
-                "desabilitada, mas o WSL 2 está operacional. "
-                "Continuando com a validação funcional."
-            )
-
-        print("[wsl] WSL " + ".".join(str(part) for part in version) + " disponível.")
+    if version is not None and version >= MINIMUM_WSL_VERSION:
+        _print_wsl_diagnostics(version, virtualization)
         return
 
     if virtualization is False:
         print(
             "[wsl][AVISO] O WMI reportou virtualização de firmware como "
             "desabilitada. Essa propriedade pode retornar falso negativo; "
-            "o bootstrap tentará validar/preparar o WSL 2 antes de concluir "
-            "que existe um bloqueio de firmware."
+            "o bootstrap tentará preparar o WSL antes de concluir que existe "
+            "um bloqueio de firmware."
         )
 
     if not _allowed(
@@ -233,7 +246,7 @@ def _ensure_windows_wsl(policy: DockerInstallPolicy) -> None:
     ):
         raise RuntimeError("WSL 2 não está pronto para o Docker Desktop.")
 
-    if version is None or not status_ok:
+    if version is None:
         print("[wsl] Habilitando WSL 2 e Virtual Machine Platform...")
         _windows_elevated(
             "wsl.exe",
@@ -260,9 +273,8 @@ def _ensure_windows_wsl(policy: DockerInstallPolicy) -> None:
     )
 
     version = _windows_wsl_version()
-    status_ok = _windows_wsl_status_ok()
 
-    if version is None or version < MINIMUM_WSL_VERSION or not status_ok:
+    if version is None or version < MINIMUM_WSL_VERSION:
         detail = (
             " O Windows também reportou a virtualização de firmware como "
             "desabilitada; se o erro persistir após reiniciar, confirme "
@@ -271,12 +283,12 @@ def _ensure_windows_wsl(policy: DockerInstallPolicy) -> None:
             else ""
         )
         raise RuntimeError(
-            "WSL/Virtual Machine Platform foram preparados, mas o Windows "
-            "precisa concluir a ativação. Reinicie a máquina e execute o "
-            f"mesmo comando novamente.{detail}"
+            "WSL/Virtual Machine Platform foram preparados, mas a versão "
+            "mínima do WSL ainda não está disponível. Reinicie a máquina e "
+            f"execute o mesmo comando novamente.{detail}"
         )
 
-    print("[wsl] WSL " + ".".join(str(part) for part in version) + " pronto.")
+    _print_wsl_diagnostics(version, virtualization)
 
 
 def _install_windows() -> None:
