@@ -13,6 +13,16 @@ __pycache__/
 # Environment / secrets
 .env
 
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfplan
+terraform.tfvars
+.terraform.tfstate.lock.info
+
 # Reports and test artifacts
 reports/allure-results/*
 reports/allure-report/
