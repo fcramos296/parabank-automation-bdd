@@ -22,8 +22,17 @@ if ($AccountId -ne $ExpectedAccountId) {
     throw "Refusing to create the backend in AWS account '$AccountId'. Expected '$ExpectedAccountId'."
 }
 
-aws s3api head-bucket --bucket $Bucket 2>$null
-$BucketExists = $LASTEXITCODE -eq 0
+$BucketExistsText = (
+    aws s3api list-buckets `
+        --query "contains(Buckets[].Name, '$Bucket')" `
+        --output text
+).Trim()
+
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to list S3 buckets for profile '$Profile'."
+}
+
+$BucketExists = $BucketExistsText -eq "True"
 
 if (-not $BucketExists) {
     Write-Host "Creating Terraform state bucket: $Bucket"
@@ -52,17 +61,33 @@ aws s3api put-public-access-block `
     --bucket $Bucket `
     --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true | Out-Null
 
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to configure public access block on '$Bucket'."
+}
+
 aws s3api put-bucket-encryption `
     --bucket $Bucket `
     --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}' | Out-Null
+
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to configure encryption on '$Bucket'."
+}
 
 aws s3api put-bucket-versioning `
     --bucket $Bucket `
     --versioning-configuration Status=Enabled | Out-Null
 
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to enable versioning on '$Bucket'."
+}
+
 aws s3api put-bucket-tagging `
     --bucket $Bucket `
     --tagging 'TagSet=[{Key=Project,Value=parabank-qa},{Key=Environment,Value=test},{Key=ManagedBy,Value=TerraformBackend}]' | Out-Null
+
+if ($LASTEXITCODE -ne 0) {
+    throw "Failed to configure tags on '$Bucket'."
+}
 
 Write-Host ""
 Write-Host "Terraform backend bucket is ready."
