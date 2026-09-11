@@ -3,7 +3,7 @@ name: Container Runner Validation
 on:
   push:
     branches:
-      - feat/aws-fargate-e2e
+      - release/2.0-aws
     paths:
       - "Dockerfile.tests"
       - ".dockerignore"
