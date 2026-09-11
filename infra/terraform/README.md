@@ -24,9 +24,71 @@ The public subnets are used so the ephemeral task can pull container images and 
 ## Prerequisites
 
 - AWS account;
-- AWS CLI authenticated locally for the first deployment and for infrastructure updates that change IAM trust;
-- Terraform 1.6+;
+- AWS CLI authenticated locally for infrastructure administration;
+- Terraform 1.10+;
 - permissions to create/update IAM, VPC, ECR, ECS, CloudWatch and S3 resources.
+
+## Remote Terraform state
+
+The 2.0 line stores Terraform state in a dedicated private S3 backend:
+
+```text
+s3://parabank-qa-terraform-state-986033946222-us-east-1/release-2.0-aws/terraform.tfstate
+```
+
+The backend uses:
+
+- S3 server-side encryption;
+- bucket versioning;
+- public-access blocking;
+- native S3 state locking through `use_lockfile = true`;
+- a state bucket separate from the Allure artifacts bucket.
+
+The backend bucket is a bootstrap dependency and is therefore created outside the main Terraform state. On the first setup only, run:
+
+```powershell
+$env:AWS_PROFILE = "parabank"
+.\bootstrap_backend.ps1
+```
+
+For an existing local state that must be migrated into S3:
+
+```powershell
+terraform init -migrate-state -reconfigure
+```
+
+Review and accept the migration prompt only after confirming the local `terraform.tfstate` is the recovered/current state.
+
+After migration, validate:
+
+```powershell
+terraform state list
+terraform plan
+```
+
+The expected result after a synchronized apply is:
+
+```text
+No changes. Your infrastructure matches the configuration.
+```
+
+Do not commit `terraform.tfstate`, `terraform.tfstate.*` or plan files.
+
+## New clone workflow
+
+Once the remote backend exists, a new workstation does not need imports or a copied state file. The normal flow is:
+
+```powershell
+git clone https://github.com/fcramos296/parabank-automation-bdd.git
+cd parabank-automation-bdd
+git switch release/2.0-aws
+$env:AWS_PROFILE = "parabank"
+cd infra\terraform
+terraform init
+terraform plan
+```
+
+Terraform downloads the existing state from S3 automatically.
 
 ## Configure
 
@@ -59,15 +121,13 @@ terraform validate
 terraform plan
 ```
 
-The repository also validates `terraform fmt` and `terraform validate` in GitHub Actions without applying infrastructure.
+The repository also validates `terraform fmt` and `terraform validate` in GitHub Actions with `terraform init -backend=false`, so CI validation does not require backend credentials and never applies infrastructure.
 
 ## Deploy or update
 
 ```bash
 terraform apply
 ```
-
-After creating `release/2.0-aws`, an existing environment provisioned with the previous branch trust must receive one new `terraform apply` so the live IAM role trusts the release branch.
 
 Important outputs:
 
@@ -112,6 +172,8 @@ Example:
 
 The Terraform task definition uses `runner_image_tag` only for the bootstrap revision. During each AWS execution, GitHub Actions pushes the new image and registers a new task-definition revision pointing to that exact image.
 
+Terraform ignores runtime drift in `container_definitions` so it does not replace a CI-generated task revision with the bootstrap image during infrastructure maintenance.
+
 ## Fargate task lifecycle
 
 The implemented execution is:
@@ -141,9 +203,7 @@ The test container waits for ParaBank readiness before starting Behave. The `tes
 - OIDC trust is restricted to `release/2.0-aws`;
 - the Fargate security group has no ingress rules;
 - the Allure S3 bucket blocks public access and uses server-side encryption;
+- the Terraform state bucket is private, encrypted and versioned;
+- S3 native lock files prevent concurrent Terraform state writes;
 - `iam:PassRole` is limited to the ECS task/execution roles;
 - task and GitHub permissions are scoped to project resources where supported.
-
-## State note
-
-Terraform backend configuration remains external. For a personal/demo account, bootstrap may use local state. Before shared/team usage, move state to a protected remote backend with locking and controlled access.
