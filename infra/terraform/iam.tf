@@ -183,10 +183,14 @@ data "aws_iam_policy_document" "github_actions" {
     sid    = "ReadTaskLogs"
     effect = "Allow"
     actions = [
+      "logs:DescribeLogStreams",
       "logs:GetLogEvents",
       "logs:FilterLogEvents",
     ]
-    resources = ["${aws_cloudwatch_log_group.ecs.arn}:*"]
+    resources = [
+      aws_cloudwatch_log_group.ecs.arn,
+      "${aws_cloudwatch_log_group.ecs.arn}:*",
+    ]
   }
 }
 
