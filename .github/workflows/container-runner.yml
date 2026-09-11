@@ -1,0 +1,55 @@
+name: Container Runner Validation
+
+on:
+  push:
+    branches:
+      - feat/aws-fargate-e2e
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  container-smoke:
+    name: Build and smoke test runner image
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Verify Docker runtime
+        shell: bash
+        run: |
+          docker --version
+          docker compose version
+
+      - name: Build test runner image
+        shell: bash
+        run: docker compose -f compose.runner.yaml build tests
+
+      - name: Start ParaBank
+        shell: bash
+        run: docker compose -f compose.runner.yaml up -d parabank
+
+      - name: Run containerized smoke suite
+        shell: bash
+        run: |
+          docker compose -f compose.runner.yaml run --rm tests --tags "@smoke"
+
+      - name: Upload Allure results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: container-runner-allure-${{ github.run_number }}
+          path: reports/allure-results
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Stop containers
+        if: always()
+        shell: bash
+        run: |
+          docker compose -f compose.runner.yaml down --volumes --remove-orphans
