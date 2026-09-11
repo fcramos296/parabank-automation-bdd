@@ -20,4 +20,4 @@ COPY scripts ./scripts
 
 RUN mkdir -p reports/allure-results
 
-ENTRYPOINT ["python", "scripts/run_container.py"]
+ENTRYPOINT ["python", "-m", "scripts.run_container"]
