@@ -4,6 +4,20 @@ on:
   push:
     branches:
       - feat/aws-fargate-e2e
+    paths:
+      - "Dockerfile.tests"
+      - ".dockerignore"
+      - "compose.runner.yaml"
+      - "requirements.txt"
+      - "behave.ini"
+      - "pyproject.toml"
+      - "config/**"
+      - "features/**"
+      - "pages/**"
+      - "services/**"
+      - "utils/**"
+      - "scripts/**"
+      - ".github/workflows/container-runner.yml"
 
   workflow_dispatch:
 
